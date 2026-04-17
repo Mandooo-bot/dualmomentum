@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #222537;
+  --border: #2e3148;
+  --text: #e8eaf0;
+  --muted: #7a7f9a;
+  --accent: #4f8ef7;
+  --buy: #22c55e;
+  --hold: #f59e0b;
+  --sell1: #f97316;
+  --sell: #ef4444;
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', sans-serif;
+  font-size: 18px;
+  min-height: 100vh;
+}
+
+/* Signal badges */
+.sig-buy   { background: rgba(34,197,94,0.15);  color: var(--buy);  }
+.sig-hold  { background: rgba(245,158,11,0.15); color: var(--hold); }
+.sig-sell1 { background: rgba(249,115,22,0.15); color: var(--sell1);}
+.sig-sell  { background: rgba(239,68,68,0.15);  color: var(--sell); }
+
+/* Pill filters */
+.pill-pass { background: rgba(34,197,94,0.12);  color: var(--buy);  }
+.pill-fail { background: rgba(239,68,68,0.12);  color: var(--sell); }
+.pill-na   { background: var(--surface2);        color: var(--muted);}

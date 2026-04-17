@@ -1,0 +1,534 @@
+"use client";
+
+import { useState } from "react";
+import { analyzePortfolio } from "@/app/lib/api";
+import type {
+  AssetConfig,
+  AssetResult,
+  AnalyzeResponse,
+  Category,
+  Signal,
+} from "@/app/lib/types";
+import { CATEGORIES, CATEGORY_COLOR } from "@/app/lib/types";
+
+/* ── 기본 포트폴리오 ── */
+const DEFAULT_ASSETS: AssetConfig[] = [
+  { ticker: "VOO",  currentWeight: "30", targetWeight: "35", monthlyBuy: "150000", accountType: "ISA",    rebalancingPeriod: "월별", category: "인덱스 코어" },
+  { ticker: "QQQ",  currentWeight: "25", targetWeight: "25", monthlyBuy: "120000", accountType: "ISA",    rebalancingPeriod: "월별", category: "인덱스 코어" },
+  { ticker: "SOXX", currentWeight: "20", targetWeight: "20", monthlyBuy: "100000", accountType: "연금저축", rebalancingPeriod: "분기",  category: "유망 섹터 ETF" },
+  { ticker: "NVDA", currentWeight: "15", targetWeight: "10", monthlyBuy: "80000",  accountType: "일반",   rebalancingPeriod: "월별", category: "모멘텀/고베타" },
+  { ticker: "TQQQ", currentWeight: "10", targetWeight: "10", monthlyBuy: "50000",  accountType: "일반",   rebalancingPeriod: "월별", category: "모멘텀/고베타" },
+  { ticker: "BIL",  currentWeight: "0",  targetWeight: "0",  monthlyBuy: "0",      accountType: "ISA",    rebalancingPeriod: "월별", category: "기타" },
+];
+
+/* ── 시그널 → 스타일 ── */
+function signalClass(sig: Signal) {
+  if (sig === "매수")    return "sig-buy";
+  if (sig === "유지")    return "sig-hold";
+  if (sig === "1차매도") return "sig-sell1";
+  return "sig-sell";
+}
+
+function signalDotColor(sig: Signal) {
+  if (sig === "매수")    return "var(--buy)";
+  if (sig === "유지")    return "var(--hold)";
+  if (sig === "1차매도") return "var(--sell1)";
+  return "var(--sell)";
+}
+
+/* ── MA200 판정 ── */
+function ma200Pill(asset: AssetResult) {
+  const above = asset.price > asset.ma200;
+  return (
+    <span className={`pill ${above ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>
+      {above ? "↑ 위" : "↓ 아래"}
+    </span>
+  );
+}
+
+/* ── Donchian 판정 ── */
+function donchianPill(asset: AssetResult) {
+  const p = asset.price;
+  if (p >= asset.donchian_55d_high)
+    return <span className="pill pill-pass" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>55D↑</span>;
+  if (p >= asset.donchian_20d_low)
+    return <span className="pill pill-pass" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>20D↑</span>;
+  return <span className="pill pill-fail" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>20D↓</span>;
+}
+
+/* ── 순위 배지 ── */
+function rankBadge(rank: number) {
+  const cls = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "rank-n";
+  const styles: Record<string, React.CSSProperties> = {
+    "rank-1": { background: "rgba(245,158,11,0.2)",  color: "#f59e0b" },
+    "rank-2": { background: "rgba(148,163,184,0.15)", color: "#94a3b8" },
+    "rank-3": { background: "rgba(180,120,60,0.15)",  color: "#b47c3c" },
+    "rank-n": { background: "var(--surface2)",         color: "var(--muted)" },
+  };
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 6, fontSize: 12, fontWeight: 700, ...styles[cls] }}>
+      {rank}
+    </span>
+  );
+}
+
+/* ── 메인 컴포넌트 ── */
+export default function Dashboard() {
+  const [currency, setCurrency] = useState<"KRW" | "USD">("KRW");
+  const [kakaoNotify, setKakaoNotify] = useState(true);
+  const [assets, setAssets] = useState<AssetConfig[]>(DEFAULT_ASSETS);
+  const [addInput, setAddInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalyzeResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"대시보드" | "시그널 이력" | "설정">("대시보드");
+
+  /* ── 포트폴리오 입력 핸들러 ── */
+  function updateAsset(idx: number, field: keyof AssetConfig, value: string) {
+    setAssets(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a));
+  }
+
+  function removeAsset(ticker: string) {
+    setAssets(prev => prev.filter(a => a.ticker !== ticker));
+  }
+
+  function addAsset() {
+    const t = addInput.trim().toUpperCase();
+    if (!t || assets.some(a => a.ticker === t)) return;
+    setAssets(prev => [...prev, {
+      ticker: t, currentWeight: "0", targetWeight: "0",
+      monthlyBuy: "0", accountType: "ISA", rebalancingPeriod: "월별", category: "기타",
+    }]);
+    setAddInput("");
+  }
+
+  /* ── 분석 실행 ── */
+  async function runAnalysis() {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const tickers = assets.map(a => a.ticker);
+      const data = await analyzePortfolio(tickers);
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "알 수 없는 오류");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ── 결과 맵 (ticker → AssetResult) ── */
+  const resultMap = new Map<string, AssetResult>(
+    result?.assets.map(a => [a.ticker, a]) ?? []
+  );
+
+  /* ── 비중 합계 ── */
+  const weightSum = assets.reduce((s, a) => s + (parseFloat(a.currentWeight) || 0), 0);
+
+  /* ── 오늘 날짜 ── */
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+
+      {/* ── TOP BAR ── */}
+      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "0 32px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <span style={{ fontSize: 11, color: "var(--muted)" }}>기준 통화</span>
+          <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+            {(["KRW", "USD"] as const).map(c => (
+              <button key={c} onClick={() => setCurrency(c)}
+                style={{ background: currency === c ? "var(--accent)" : "none", border: "none", color: currency === c ? "#fff" : "var(--muted)", padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
+                {c === "KRW" ? "원 KRW" : "달러 USD"}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--muted)" }}>
+            <div onClick={() => setKakaoNotify(v => !v)}
+              style={{ width: 32, height: 18, background: kakaoNotify ? "#FEE500" : "var(--border)", borderRadius: 9, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+              <span style={{ position: "absolute", top: 3, left: kakaoNotify ? 17 : 3, width: 12, height: 12, background: "#fff", borderRadius: "50%", transition: "left 0.2s", display: "block" }} />
+            </div>
+            <span>카카오톡 시그널 알림 {kakaoNotify ? "ON" : "OFF"}</span>
+          </div>
+        </div>
+        <button style={{ display: "flex", alignItems: "center", gap: 7, background: "#FEE500", color: "#191919", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#191919"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.6 5.1 4 6.6l-1 3.6 4.1-2.7c.9.2 1.9.3 2.9.3 5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/></svg>
+          카카오로 로그인
+        </button>
+      </div>
+
+      {/* ── NAV ── */}
+      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", height: 56, borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>
+          Dual<span style={{ color: "var(--accent)" }}>Momentum</span>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {(["대시보드", "시그널 이력", "설정"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{ background: activeTab === tab ? "var(--surface2)" : "none", border: "none", color: activeTab === tab ? "var(--text)" : "var(--muted)", padding: "6px 14px", fontSize: 13, cursor: "pointer", borderRadius: 7 }}>
+              {tab}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <div style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 24px" }}>
+
+        {/* ① 전략 소개 */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 6 }}>
+            듀얼<span style={{ color: "var(--accent)" }}>모멘텀</span> 전략이란?
+          </div>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20, lineHeight: 1.6 }}>
+            게리 안토나치(Gary Antonacci)가 체계화한 퀀트 투자 전략으로, <strong style={{ color: "var(--text)" }}>상대모멘텀</strong>과 <strong style={{ color: "var(--text)" }}>절대모멘텀</strong>을 결합해
+            상승 추세의 자산에 집중 투자하고, 시장 전체가 위험 구간에 진입하면 현금으로 대피하는 방식입니다.
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+            {[
+              { icon: "📈", title: "상대모멘텀 — 무엇을 살까?", body: "보유 자산들의 252거래일(약 1년) 수익률을 비교해 순위를 매깁니다. 수익률이 높은 자산일수록 투자 우선순위가 높아집니다." },
+              { icon: "🛡️", title: "절대모멘텀 — 지금 시장에 들어가도 될까?", body: "각 자산의 252거래일 수익률이 BIL(단기국채 ETF)보다 낮으면 전체 매도. 초과수익이 마이너스면 위험을 감수할 이유가 없다는 신호입니다." },
+              { icon: "📐", title: "기술적 필터 — 언제 사고 팔까?", body: "MA200(200일 이동평균)과 Donchian Channel(55D/20D)로 진입·청산 타이밍을 정밀화합니다. 55D 상단 돌파 시 매수 / 20D 하단 이탈 시 1차 매도." },
+            ].map(card => (
+              <div key={card.title} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "18px 20px" }}>
+                <div style={{ fontSize: 20, marginBottom: 10 }}>{card.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{card.title}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.75 }}>{card.body}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 분석 흐름 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "14px 20px", fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
+            {[
+              { dot: { background: "rgba(79,142,247,0.2)", color: "var(--accent)" }, label: "1", text: "티커 입력" },
+              { dot: { background: "rgba(167,139,250,0.2)", color: "#a78bfa" },     label: "2", text: "절대모멘텀 확인 (vs BIL)" },
+              { dot: { background: "rgba(167,139,250,0.2)", color: "#a78bfa" },     label: "3", text: "상대모멘텀 순위" },
+              { dot: { background: "rgba(34,197,94,0.2)",  color: "var(--buy)" },  label: "4", text: "기술적 필터 (MA200 · Donchian)" },
+            ].map((step, i) => (
+              <span key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, ...step.dot }}>{step.label}</span>
+                  <span>{step.text}</span>
+                </span>
+                <span style={{ color: "var(--border)", fontSize: 14 }}>›</span>
+              </span>
+            ))}
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, background: "rgba(34,197,94,0.2)", color: "var(--buy)" }}>✓</span>
+              <span style={{ color: "var(--buy)", fontWeight: 600 }}>매수 / 유지</span>
+            </span>
+            <span style={{ color: "var(--border)", fontSize: 14, margin: "0 2px" }}>or</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, background: "rgba(239,68,68,0.2)", color: "var(--sell)" }}>✕</span>
+              <span style={{ color: "var(--sell)", fontWeight: 600 }}>매도 / 대피</span>
+            </span>
+          </div>
+        </div>
+
+        {/* 대시보드 안내 */}
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "16px 22px", marginBottom: 24, fontSize: 12, color: "var(--muted)", lineHeight: 1.9 }}>
+          <strong style={{ color: "var(--text)" }}>이 대시보드</strong>는 DCA(정액 적립식)로 모아가는 자산의 매수·유지·매도 시그널을 자동으로 판단해 드립니다.<br />
+          <strong style={{ color: "var(--text)" }}>절대모멘텀</strong>: 각 자산의 252거래일 수익률이 BIL보다 낮으면 매도 시그널을 표시합니다.<br />
+          <strong style={{ color: "var(--text)" }}>상대모멘텀</strong>: 보유 자산을 252거래일 수익률 기준으로 순위화하여 자본 배분 우선순위를 제안합니다.<br />
+          <strong style={{ color: "var(--text)" }}>기술적 필터</strong>: MA200, Donchian 55D/20D를 적용해 매수 타이밍과 청산 시점을 구체적으로 안내합니다.<br />
+          데이터 출처: Yahoo Finance (yfinance) · 매일 장 마감 후 자동 업데이트 · 이 도구는 참고용이며 투자 결정은 본인 판단 하에 이루어져야 합니다.
+        </div>
+
+        {/* ② 포트폴리오 입력 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700 }}>포트폴리오</h2>
+            <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>{assets.length}종목</span>
+          </div>
+          <span style={{ fontSize: 11, color: "var(--muted)" }}>기준일: {today}</span>
+        </div>
+
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "hidden", marginBottom: 8 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["티커", "카테고리", "현재 비중 (%)", "목표 비중 (%)", "월 매수 금액", "계좌 종류", "리밸런싱 주기", ""].map((h, i) => (
+                  <th key={i} style={{ background: "var(--surface2)", padding: "9px 14px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: i >= 2 && i <= 6 ? "center" : "left", letterSpacing: "0.4px" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {assets.map((asset, idx) => (
+                <tr key={asset.ticker} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "10px 14px" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px" }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{asset.ticker}</span>
+                      <span onClick={() => removeAsset(asset.ticker)} style={{ color: "var(--muted)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: "10px 14px" }}>
+                    <select value={asset.category} onChange={e => updateAsset(idx, "category", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: CATEGORY_COLOR[asset.category as keyof typeof CATEGORY_COLOR], padding: "5px 9px", fontSize: 11, outline: "none", fontWeight: 600 }}>
+                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                    <input value={asset.currentWeight} onChange={e => updateAsset(idx, "currentWeight", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "5px 9px", fontSize: 12, outline: "none", width: 70, textAlign: "center" }} />
+                  </td>
+                  <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                    <input value={asset.targetWeight} onChange={e => updateAsset(idx, "targetWeight", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "5px 9px", fontSize: 12, outline: "none", width: 70, textAlign: "center" }} />
+                  </td>
+                  <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                    <input value={asset.monthlyBuy} onChange={e => updateAsset(idx, "monthlyBuy", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "5px 9px", fontSize: 12, outline: "none", width: 110, textAlign: "right" }} />
+                  </td>
+                  <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                    <select value={asset.accountType} onChange={e => updateAsset(idx, "accountType", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "5px 9px", fontSize: 12, outline: "none", width: 100 }}>
+                      {["ISA", "연금저축", "일반"].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                    <select value={asset.rebalancingPeriod} onChange={e => updateAsset(idx, "rebalancingPeriod", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "5px 9px", fontSize: 12, outline: "none", width: 80 }}>
+                      {["월별", "분기", "반기"].map(v => <option key={v}>{v}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: "10px 14px" }} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* 티커 추가 행 */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 14px", borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.01)" }}>
+            <input value={addInput} onChange={e => setAddInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addAsset()}
+              placeholder="티커 추가 (예: SCHD)"
+              style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "6px 10px", fontSize: 12, outline: "none", width: 160 }} />
+            <button onClick={addAsset}
+              style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>
+              + 추가
+            </button>
+            <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: "auto" }}>
+              비중 합계: <strong style={{ color: weightSum === 100 ? "var(--buy)" : weightSum > 100 ? "var(--sell)" : "var(--text)" }}>{weightSum}%</strong>
+            </span>
+          </div>
+        </div>
+
+        <button onClick={runAnalysis} disabled={loading}
+          style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 28px", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", width: "100%", marginTop: 14, opacity: loading ? 0.7 : 1 }}>
+          {loading ? "분석 중..." : "분석 실행"}
+        </button>
+
+        {error && (
+          <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "var(--radius)", padding: "12px 18px", marginTop: 14, color: "var(--sell)", fontSize: 13 }}>
+            오류: {error}
+          </div>
+        )}
+
+        {/* ── 분석 결과 ── */}
+        {result && (
+          <>
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
+
+            {/* ③ 시장 절대모멘텀 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>시장 절대모멘텀</h2>
+              <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>VOO vs BIL</span>
+            </div>
+
+            {(() => {
+              const voo = resultMap.get("VOO");
+              const bilRet = result.bil_return_252d;
+              const vooRet = voo?.return_252d ?? null;
+              const excess = vooRet !== null ? vooRet - bilRet : null;
+              const pass = excess !== null && excess >= 0;
+              return (
+                <>
+                  <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "22px 24px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 20, alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>VOO 252거래일 수익률</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: vooRet !== null && vooRet >= 0 ? "var(--buy)" : "var(--sell)" }}>{vooRet !== null ? `${vooRet >= 0 ? "+" : ""}${vooRet.toFixed(2)}%` : "—"}</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>S&amp;P 500 기준</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>BIL 252거래일 수익률</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: "var(--muted)" }}>+{bilRet.toFixed(2)}%</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>단기국채 기준 (무위험)</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>초과수익률 (VOO − BIL)</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: pass ? "var(--buy)" : "var(--sell)" }}>{excess !== null ? `${excess >= 0 ? "+" : ""}${excess.toFixed(2)}%` : "—"}</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>{pass ? "양수 → 시장 진입 유효" : "음수 → 대피 신호"}</span>
+                    </div>
+                    <div style={{ textAlign: "center", background: pass ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${pass ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, borderRadius: 10, padding: "14px 22px" }}>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>시장 절대모멘텀 판정</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: pass ? "var(--buy)" : "var(--sell)" }}>{pass ? "통과 — 투자 유효 구간" : "미통과 — BIL 대피"}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 10, lineHeight: 1.7 }}>
+                    * 시장 절대모멘텀은 전략 대전제입니다. VOO − BIL 초과수익이 음수(마이너스)로 전환되면 전체 매도 시그널이 발생하며 BIL(현금성 자산)로 대피합니다.
+                  </div>
+                </>
+              );
+            })()}
+
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
+
+            {/* ④ 섹터별 상대모멘텀 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>섹터별 상대모멘텀</h2>
+              <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>252거래일 수익률 · 섹터 내 강한 순</span>
+            </div>
+
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["순위", "섹터", "티커 · 종목명", "252거래일 수익률", "절대모멘텀", "MA200", "Donchian", "투자 순위"].map((h, i) => (
+                      <th key={i} style={{ padding: "8px 14px", fontSize: 11, color: "var(--muted)", fontWeight: 600, textAlign: i === 0 || i >= 4 ? "center" : i === 3 ? "right" : "left", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {CATEGORIES.map(cat => {
+                    const catAssets = assets.filter(a => a.category === cat);
+                    if (!catAssets.length) return null;
+                    const catResults = catAssets.map(a => resultMap.get(a.ticker)).filter(Boolean) as AssetResult[];
+                    catResults.sort((a, b) => b.return_252d - a.return_252d);
+                    return (
+                      <>
+                        <tr key={`sep-${cat}`} style={{ background: `rgba(${cat === "인덱스 코어" ? "79,142,247" : cat === "유망 섹터 ETF" ? "167,139,250" : cat === "알파 후보" ? "52,211,153" : cat === "모멘텀/고베타" ? "245,158,11" : "107,114,128"},0.04)` }}>
+                          <td colSpan={8} style={{ padding: "7px 14px", fontSize: "0.75em", color: "var(--muted)", letterSpacing: "0.5px", textAlign: "center" }}>
+                            ── {cat} ──
+                          </td>
+                        </tr>
+                        {catResults.map((ar, i) => (
+                          <tr key={ar.ticker}>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}>{rankBadge(i + 1)}</td>
+                            <td style={{ padding: "11px 14px", fontSize: "0.75em", color: CATEGORY_COLOR[cat], fontWeight: 600 }}>{cat}</td>
+                            <td style={{ padding: "11px 14px" }}>
+                              <span style={{ fontWeight: 700 }}>{ar.ticker}</span>
+                            </td>
+                            <td style={{ padding: "11px 14px", textAlign: "right" }}>
+                              <span style={{ fontWeight: 600, color: ar.return_252d >= 0 ? "var(--buy)" : "var(--sell)" }}>{ar.return_252d >= 0 ? "+" : ""}{ar.return_252d.toFixed(2)}%</span>
+                            </td>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                              <span className={`pill ${ar.excess_return >= 0 ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{ar.excess_return >= 0 ? "통과" : "미통과"}</span>
+                            </td>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}>{ma200Pill(ar)}</td>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}>{donchianPill(ar)}</td>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700 }} className={signalClass(ar.signal as Signal)}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: signalDotColor(ar.signal as Signal), display: "inline-block" }} />
+                                {ar.signal}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {/* BIL 행은 기타 섹터에 표시 */}
+                        {cat === "기타" && (
+                          <tr>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}><span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 6, fontSize: 12, fontWeight: 700, background: "var(--surface2)", color: "var(--muted)", opacity: 0.4 }}>—</span></td>
+                            <td style={{ padding: "11px 14px", fontSize: "0.75em", color: "var(--muted)", fontWeight: 600 }}>기타</td>
+                            <td style={{ padding: "11px 14px" }}><span style={{ fontWeight: 700, color: "var(--muted)" }}>BIL</span><span style={{ color: "var(--muted)", fontSize: "0.8em", marginLeft: 6 }}>SPDR 1-3M T-Bill (기준)</span></td>
+                            <td style={{ padding: "11px 14px", textAlign: "right" }}><span style={{ color: "var(--muted)" }}>+{result.bil_return_252d.toFixed(2)}%</span></td>
+                            <td style={{ padding: "11px 14px", textAlign: "center" }}><span className="pill pill-na" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>기준</span></td>
+                            <td colSpan={3} style={{ padding: "11px 14px", textAlign: "center", color: "var(--muted)" }}>—</td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
+
+            {/* ⑤ 개별 자산 상세 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>개별 자산 상세</h2>
+              <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>듀얼모멘텀 시그널</span>
+            </div>
+
+            {CATEGORIES.map(cat => {
+              const catAssets = assets.filter(a => a.category === cat);
+              if (!catAssets.length) return null;
+              const catResults = catAssets.map(a => ({ cfg: a, res: resultMap.get(a.ticker) })).filter(x => x.res);
+              if (!catResults.length) return null;
+              return (
+                <div key={cat} style={{ marginBottom: 28 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: CATEGORY_COLOR[cat], display: "inline-block" }} />
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{cat}</span>
+                    <span style={{ fontSize: 11, color: "var(--muted)", background: "var(--surface2)", padding: "2px 8px", borderRadius: 10 }}>{catResults.length}종목</span>
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        {["티커", "252거래일 수익률", "BIL 초과수익", "절대모멘텀", "MA200", "Donchian", "시그널", "현재/목표 비중", "월 매수금액", "계좌"].map((h, i) => (
+                          <th key={i} style={{ padding: "7px 12px", fontSize: 11, color: "var(--muted)", fontWeight: 500, textAlign: i === 0 ? "left" : i >= 3 && i <= 6 ? "center" : "right", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {catResults.map(({ cfg, res: ar }) => (
+                        <tr key={cfg.ticker}>
+                          <td style={{ padding: "11px 12px", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>{cfg.ticker}</div>
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "right", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            <span style={{ fontWeight: 600, color: ar!.return_252d >= 0 ? "var(--buy)" : "var(--sell)" }}>{ar!.return_252d >= 0 ? "+" : ""}{ar!.return_252d.toFixed(2)}%</span>
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "right", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            <span style={{ color: ar!.excess_return >= 0 ? "var(--buy)" : "var(--sell)" }}>{ar!.excess_return >= 0 ? "+" : ""}{ar!.excess_return.toFixed(2)}%</span>
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            <span className={`pill ${ar!.excess_return >= 0 ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{ar!.excess_return >= 0 ? "통과" : "미통과"}</span>
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>{ma200Pill(ar!)}</td>
+                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>{donchianPill(ar!)}</td>
+                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700 }} className={signalClass(ar!.signal as Signal)}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: signalDotColor(ar!.signal as Signal), display: "inline-block" }} />
+                              {ar!.signal}
+                            </span>
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "right", fontSize: 12, borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            <span style={{ fontWeight: 600 }}>{cfg.currentWeight}%</span>
+                            <span style={{ color: "var(--muted)", fontSize: 11 }}> → {cfg.targetWeight}%</span>
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "right", fontSize: 12, borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
+                            {parseInt(cfg.monthlyBuy).toLocaleString()}{currency === "KRW" ? "원" : "$"}
+                          </td>
+                          <td style={{ padding: "11px 12px", textAlign: "right", fontSize: 11, color: "var(--muted)", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>{cfg.accountType}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+
+            {/* API 오류 목록 */}
+            {result.errors.length > 0 && (
+              <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "var(--radius)", padding: "12px 18px", marginBottom: 24, fontSize: 12, color: "var(--sell)" }}>
+                <strong>데이터 수집 오류:</strong>
+                {result.errors.map(e => (
+                  <div key={e.ticker}>{e.ticker}: {e.error}</div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* FOOTER */}
+        <div style={{ marginTop: 40, paddingTop: 18, borderTop: "1px solid var(--border)", color: "var(--muted)", fontSize: 11, lineHeight: 1.9 }}>
+          * 이 대시보드는 투자 판단의 참고 도구입니다. 최종 매매 결정은 본인의 판단과 책임 하에 이루어져야 합니다.<br />
+          * 데이터 출처: Yahoo Finance (yfinance) | 지표 계산: 서버 자체 계산 | 업데이트: 매일 장 마감 후
+        </div>
+      </div>
+    </div>
+  );
+}

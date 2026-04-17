@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>듀얼모멘텀 대시보드</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222537;
+      --border: #2e3148;
+      --text: #e8eaf0;
+      --muted: #7a7f9a;
+      --accent: #4f8ef7;
+      --buy: #22c55e;
+      --hold: #f59e0b;
+      --sell1: #f97316;
+      --sell: #ef4444;
+      --radius: 12px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Apple SD Gothic Neo', 'Pretendard', sans-serif; font-size: 18px; min-height: 100vh; }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 48px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 20px; }
+    .topbar-label { font-size: 11px; color: var(--muted); }
+    .currency-toggle {
+      display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    }
+    .currency-toggle button {
+      background: none; border: none; color: var(--muted); padding: 4px 12px; font-size: 12px; cursor: pointer;
+    }
+    .currency-toggle button.active { background: var(--accent); color: #fff; }
+    .kakao-toggle {
+      display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+    }
+    .toggle-switch {
+      width: 32px; height: 18px; background: var(--border); border-radius: 9px; position: relative; cursor: pointer;
+    }
+    .toggle-switch.on { background: #FEE500; }
+    .toggle-switch::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: left 0.2s;
+    }
+    .toggle-switch.on::after { left: 17px; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .btn-kakao {
+      display: flex; align-items: center; gap: 7px;
+      background: #FEE500; color: #191919; border: none; border-radius: 7px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+
+    /* ── NAV ── */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 56px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-size: 18px; font-weight: 700; }
+    .logo span { color: var(--accent); }
+    .nav-tabs { display: flex; gap: 4px; }
+    .nav-tab {
+      background: none; border: none; color: var(--muted); padding: 6px 14px;
+      font-size: 13px; cursor: pointer; border-radius: 7px;
+    }
+    .nav-tab.active { background: var(--surface2); color: var(--text); }
+
+    /* ── LAYOUT ── */
+    .container { max-width: 1160px; margin: 0 auto; padding: 28px 24px; }
+
+    /* ── INTRO ── */
+    .intro {
+      margin-bottom: 28px;
+    }
+    .intro-title {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .intro-title span { color: var(--accent); }
+    .intro-sub {
+      font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.6;
+    }
+    .intro-cards {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+    }
+    .intro-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .intro-card-icon {
+      font-size: 20px; margin-bottom: 10px;
+    }
+    .intro-card-title {
+      font-size: 13px; font-weight: 700; margin-bottom: 6px;
+    }
+    .intro-card-body {
+      font-size: 12px; color: var(--muted); line-height: 1.75;
+    }
+    .intro-card-body strong { color: var(--text); }
+    .intro-flow {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 18px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 20px;
+      font-size: 12px; color: var(--muted); flex-wrap: wrap;
+    }
+    .flow-step {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .flow-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .flow-dot-1 { background: rgba(79,142,247,0.2); color: var(--accent); }
+    .flow-dot-2 { background: rgba(167,139,250,0.2); color: #a78bfa; }
+    .flow-dot-3 { background: rgba(34,197,94,0.2); color: var(--buy); }
+    .flow-dot-x { background: rgba(239,68,68,0.2); color: var(--sell); }
+    .flow-arrow { color: var(--border); font-size: 14px; }
+
+    /* ── DESCRIPTION ── */
+    .description {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 22px;
+      margin-bottom: 24px;
+      font-size: 12px; color: var(--muted); line-height: 1.9;
+    }
+    .description strong { color: var(--text); }
+
+    /* ── SECTION HEADER ── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title h2 { font-size: 15px; font-weight: 700; }
+    .section-title .badge {
+      font-size: 11px; background: var(--surface2); color: var(--muted);
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .section-sep {
+      border: none; border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+
+    /* ── PORTFOLIO PANEL ── */
+    .portfolio-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .portfolio-panel table { width: 100%; border-collapse: collapse; }
+    .portfolio-panel thead th {
+      background: var(--surface2);
+      padding: 9px 14px;
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-align: left; letter-spacing: 0.4px;
+    }
+    .portfolio-panel thead th.right { text-align: right; }
+    .portfolio-panel thead th.center { text-align: center; }
+    .portfolio-panel tbody td {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .portfolio-panel tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .ticker-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 10px;
+    }
+    .ticker-chip .sym { font-weight: 700; font-size: 13px; }
+    .ticker-chip .rm { color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; }
+    .mini-input {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text);
+      padding: 5px 9px; font-size: 12px; outline: none; width: 100%;
+      transition: border-color 0.2s;
+    }
+    .mini-input:focus { border-color: var(--accent); }
+    .mini-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text);
+      padding: 5px 9px; font-size: 12px; outline: none; width: 100%;
+    }
+    .add-ticker-row {
+      display: flex; gap: 10px; align-items: center;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      background: rgba(255,255,255,0.01);
+    }
+    .add-ticker-row input {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text);
+      padding: 6px 10px; font-size: 12px; outline: none;
+      width: 140px;
+    }
+    .btn-add {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px;
+      padding: 6px 14px; font-size: 12px; cursor: pointer;
+    }
+    .btn-run {
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 8px;
+      padding: 10px 28px; font-size: 14px; font-weight: 700;
+      cursor: pointer; width: 100%;
+      margin-top: 14px; transition: opacity 0.2s;
+    }
+    .btn-run:hover { opacity: 0.85; }
+
+    /* ── ABSOLUTE MOMENTUM (시장) ── */
+    .abs-mom-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      display: grid; grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 20px; align-items: center;
+      margin-bottom: 8px;
+    }
+    .abs-stat { display: flex; flex-direction: column; gap: 5px; }
+    .abs-stat .lbl { font-size: 11px; color: var(--muted); }
+    .abs-stat .val { font-size: 20px; font-weight: 700; }
+    .abs-stat .sub { font-size: 11px; color: var(--muted); }
+    .abs-verdict {
+      text-align: center;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 10px; padding: 14px 22px;
+    }
+    .abs-verdict .v-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .abs-verdict .v-result { font-size: 16px; font-weight: 700; color: var(--buy); }
+    .abs-verdict.danger {
+      background: rgba(239,68,68,0.1);
+      border-color: rgba(239,68,68,0.3);
+    }
+    .abs-verdict.danger .v-result { color: var(--sell); }
+    .abs-desc {
+      font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.7;
+    }
+
+    /* ── RELATIVE MOMENTUM (섹터) ── */
+    .rel-table { width: 100%; border-collapse: collapse; }
+    .rel-table thead th {
+      padding: 8px 14px;
+      font-size: 11px; color: var(--muted); font-weight: 600;
+      text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .rel-table thead th.right { text-align: right; }
+    .rel-table thead th.center { text-align: center; }
+    .rel-table tbody td {
+      padding: 11px 14px;
+      border-bottom: 1px solid rgba(46,49,72,0.5);
+      vertical-align: middle;
+    }
+    .rel-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .rank-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 6px;
+      font-size: 12px; font-weight: 700;
+    }
+    .rank-1 { background: rgba(245,158,11,0.2); color: #f59e0b; }
+    .rank-2 { background: rgba(148,163,184,0.15); color: #94a3b8; }
+    .rank-3 { background: rgba(180,120,60,0.15); color: #b47c3c; }
+    .rank-n { background: var(--surface2); color: var(--muted); }
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-track { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; }
+    .bar-fill { height: 5px; border-radius: 3px; background: var(--accent); }
+    .bar-fill.neg { background: var(--sell); }
+    .sector-name { font-weight: 600; font-size: 13px; }
+    .sector-tickers { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── INDIVIDUAL ASSETS ── */
+    .asset-section { margin-bottom: 28px; }
+    .asset-section-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px;
+    }
+    .sector-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-core { background: #4f8ef7; }
+    .dot-sector { background: #a78bfa; }
+    .dot-alpha { background: #34d399; }
+    .dot-momentum { background: #f59e0b; }
+    .dot-other { background: #6b7280; }
+    .asset-section-label { font-size: 13px; font-weight: 700; }
+    .asset-count { font-size: 11px; color: var(--muted); background: var(--surface2); padding: 2px 8px; border-radius: 10px; }
+
+    .asset-table { width: 100%; border-collapse: collapse; }
+    .asset-table thead th {
+      padding: 7px 12px;
+      font-size: 11px; color: var(--muted); font-weight: 500;
+      text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .asset-table thead th.right { text-align: right; }
+    .asset-table thead th.center { text-align: center; }
+    .asset-table tbody td {
+      padding: 11px 12px;
+      border-bottom: 1px solid rgba(46,49,72,0.4);
+      vertical-align: middle;
+    }
+    .asset-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .t-name { font-weight: 700; font-size: 13px; }
+    .t-full { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .pct { font-weight: 600; }
+    .pos { color: var(--buy); }
+    .neg { color: var(--sell); }
+    .muted { color: var(--muted); }
+
+    .signal {
+      display: inline-flex; align-items: center; gap: 5px;
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 12px; font-weight: 700;
+    }
+    .sdot { width: 6px; height: 6px; border-radius: 50%; }
+    .sig-buy { background: rgba(34,197,94,0.15); color: var(--buy); }
+    .sig-buy .sdot { background: var(--buy); }
+    .sig-hold { background: rgba(245,158,11,0.15); color: var(--hold); }
+    .sig-hold .sdot { background: var(--hold); }
+    .sig-sell1 { background: rgba(249,115,22,0.15); color: var(--sell1); }
+    .sig-sell1 .sdot { background: var(--sell1); }
+    .sig-sell { background: rgba(239,68,68,0.15); color: var(--sell); }
+    .sig-sell .sdot { background: var(--sell); }
+
+    .pill { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+    .pill-pass { background: rgba(34,197,94,0.12); color: var(--buy); }
+    .pill-fail { background: rgba(239,68,68,0.12); color: var(--sell); }
+    .pill-na { background: var(--surface2); color: var(--muted); }
+
+    .filters { display: flex; gap: 5px; }
+    .weight-col { font-size: 12px; }
+    .weight-cur { font-weight: 600; }
+    .weight-tgt { color: var(--muted); font-size: 11px; }
+
+    /* ── FOOTER ── */
+    .footer {
+      margin-top: 40px; padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: var(--muted); font-size: 11px; line-height: 1.9;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-label">기준 통화</span>
+    <div class="currency-toggle">
+      <button class="active">원 KRW</button>
+      <button>달러 USD</button>
+    </div>
+    <div class="kakao-toggle">
+      <div class="toggle-switch on"></div>
+      <span>카카오톡 시그널 알림 ON</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn-kakao">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#191919"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.6 5.1 4 6.6l-1 3.6 4.1-2.7c.9.2 1.9.3 2.9.3 5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/></svg>
+      카카오로 로그인
+    </button>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">Dual<span>Momentum</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active">대시보드</button>
+    <button class="nav-tab">시그널 이력</button>
+    <button class="nav-tab">설정</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- ① 전략 소개 -->
+  <div class="intro">
+    <div class="intro-title">듀얼<span>모멘텀</span> 전략이란?</div>
+    <div class="intro-sub">
+      게리 안토나치(Gary Antonacci)가 체계화한 퀀트 투자 전략으로, <strong style="color:var(--text)">상대모멘텀</strong>과 <strong style="color:var(--text)">절대모멘텀</strong>을 결합해<br/>
+      상승 추세의 자산에 집중 투자하고, 시장 전체가 위험 구간에 진입하면 현금으로 대피하는 방식입니다.
+    </div>
+
+    <div class="intro-cards">
+      <div class="intro-card">
+        <div class="intro-card-icon">📈</div>
+        <div class="intro-card-title">상대모멘텀 — 무엇을 살까?</div>
+        <div class="intro-card-body">
+          보유 자산들의 <strong>252거래일(약 1년) 수익률</strong>을 비교해 순위를 매깁니다.<br/>
+          수익률이 높은 자산일수록 투자 우선순위가 높아집니다.<br/>
+          "오르는 자산이 계속 오른다"는 모멘텀 효과를 활용합니다.
+        </div>
+      </div>
+      <div class="intro-card">
+        <div class="intro-card-icon">🛡️</div>
+        <div class="intro-card-title">절대모멘텀 — 지금 시장에 들어가도 될까?</div>
+        <div class="intro-card-body">
+          각 자산의 252거래일 수익률이 <strong>BIL(단기국채 ETF)</strong>보다 낮으면 전체 매도.<br/>
+          초과수익이 마이너스라는 것은 위험을 감수할 이유가 없다는 신호입니다.<br/>
+          이 단계가 하락장 손실을 줄여주는 핵심 방어막입니다.
+        </div>
+      </div>
+      <div class="intro-card">
+        <div class="intro-card-icon">📐</div>
+        <div class="intro-card-title">기술적 필터 — 언제 사고 팔까?</div>
+        <div class="intro-card-body">
+          <strong>MA200</strong>(200일 이동평균)과 <strong>Donchian Channel</strong>(55D/20D)로 진입·청산 타이밍을 정밀화합니다.<br/>
+          55D 상단 돌파 시 매수 / 20D 하단 이탈 시 1차 매도 / MA200 하단 시 전체 매도.
+        </div>
+      </div>
+    </div>
+
+    <div class="intro-flow">
+      <div class="flow-step">
+        <div class="flow-dot flow-dot-1">1</div>
+        <span>티커 입력</span>
+      </div>
+      <span class="flow-arrow">›</span>
+      <div class="flow-step">
+        <div class="flow-dot flow-dot-2">2</div>
+        <span>절대모멘텀 확인 (vs BIL)</span>
+      </div>
+      <span class="flow-arrow">›</span>
+      <div class="flow-step">
+        <div class="flow-dot flow-dot-2">3</div>
+        <span>상대모멘텀 순위</span>
+      </div>
+      <span class="flow-arrow">›</span>
+      <div class="flow-step">
+        <div class="flow-dot flow-dot-3">4</div>
+        <span>기술적 필터 (MA200 · Donchian)</span>
+      </div>
+      <span class="flow-arrow">›</span>
+      <div class="flow-step">
+        <div class="flow-dot flow-dot-3">✓</div>
+        <span style="color:var(--buy);font-weight:600">매수 / 유지</span>
+      </div>
+      <span class="flow-arrow" style="margin:0 2px">or</span>
+      <div class="flow-step">
+        <div class="flow-dot flow-dot-x">✕</div>
+        <span style="color:var(--sell);font-weight:600">매도 / 대피</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ① 대시보드 사용 안내 -->
+  <div class="description">
+    <strong>이 대시보드</strong>는 DCA(정액 적립식)로 모아가는 자산의 매수·유지·매도 시그널을 자동으로 판단해 드립니다.<br/>
+    <strong>절대모멘텀</strong>: 각 자산의 252거래일(약 1년) 수익률이 BIL(단기국채 ETF)보다 낮으면 매도 시그널을 표시합니다.<br/>
+    <strong>상대모멘텀</strong>: 보유 자산을 252거래일 수익률 기준으로 순위화하여 자본 배분 우선순위를 제안합니다.<br/>
+    <strong>기술적 필터</strong>: MA200, Donchian 55D/20D를 적용해 매수 타이밍과 청산 시점을 구체적으로 안내합니다.<br/>
+    데이터 출처: Yahoo Finance (yfinance) · 매일 장 마감 후 자동 업데이트 · 이 도구는 참고용이며 투자 결정은 본인 판단 하에 이루어져야 합니다.
+  </div>
+
+  <!-- ② 포트폴리오 입력 -->
+  <div class="section-header">
+    <div class="section-title">
+      <h2>포트폴리오</h2>
+      <span class="badge">6종목</span>
+    </div>
+    <span style="font-size:11px;color:var(--muted)">기준일: 2026-04-17</span>
+  </div>
+
+  <div class="portfolio-panel">
+    <table>
+      <thead>
+        <tr>
+          <th>티커</th>
+          <th>종목명</th>
+          <th class="center">현재 비중 (%)</th>
+          <th class="center">목표 비중 (%)</th>
+          <th class="center">월 매수 금액</th>
+          <th class="center">계좌 종류</th>
+          <th class="center">리밸런싱 주기</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="ticker-chip"><span class="sym">VOO</span><span class="rm">×</span></div></td>
+          <td style="font-size:12px;color:var(--muted)">Vanguard S&P 500</td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="30" /></td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="35" /></td>
+          <td class="center"><input class="mini-input" style="width:110px;text-align:right" value="150,000" /></td>
+          <td class="center">
+            <select class="mini-select" style="width:100px">
+              <option>ISA</option><option>연금저축</option><option>일반</option>
+            </select>
+          </td>
+          <td class="center">
+            <select class="mini-select" style="width:80px">
+              <option>월별</option><option>분기</option><option>반기</option>
+            </select>
+          </td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><div class="ticker-chip"><span class="sym">QQQ</span><span class="rm">×</span></div></td>
+          <td style="font-size:12px;color:var(--muted)">Invesco QQQ Trust</td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="25" /></td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="25" /></td>
+          <td class="center"><input class="mini-input" style="width:110px;text-align:right" value="120,000" /></td>
+          <td class="center">
+            <select class="mini-select" style="width:100px">
+              <option>ISA</option><option>연금저축</option><option>일반</option>
+            </select>
+          </td>
+          <td class="center">
+            <select class="mini-select" style="width:80px">
+              <option>월별</option><option>분기</option><option>반기</option>
+            </select>
+          </td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><div class="ticker-chip"><span class="sym">SOXX</span><span class="rm">×</span></div></td>
+          <td style="font-size:12px;color:var(--muted)">iShares Semiconductor</td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="20" /></td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="20" /></td>
+          <td class="center"><input class="mini-input" style="width:110px;text-align:right" value="100,000" /></td>
+          <td class="center">
+            <select class="mini-select" style="width:100px">
+              <option>ISA</option><option selected>연금저축</option><option>일반</option>
+            </select>
+          </td>
+          <td class="center">
+            <select class="mini-select" style="width:80px">
+              <option>월별</option><option selected>분기</option><option>반기</option>
+            </select>
+          </td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><div class="ticker-chip"><span class="sym">NVDA</span><span class="rm">×</span></div></td>
+          <td style="font-size:12px;color:var(--muted)">NVIDIA Corporation</td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="15" /></td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="10" /></td>
+          <td class="center"><input class="mini-input" style="width:110px;text-align:right" value="80,000" /></td>
+          <td class="center">
+            <select class="mini-select" style="width:100px">
+              <option>ISA</option><option>연금저축</option><option selected>일반</option>
+            </select>
+          </td>
+          <td class="center">
+            <select class="mini-select" style="width:80px">
+              <option selected>월별</option><option>분기</option><option>반기</option>
+            </select>
+          </td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><div class="ticker-chip"><span class="sym">TQQQ</span><span class="rm">×</span></div></td>
+          <td style="font-size:12px;color:var(--muted)">ProShares UltraPro QQQ</td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="10" /></td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="10" /></td>
+          <td class="center"><input class="mini-input" style="width:110px;text-align:right" value="50,000" /></td>
+          <td class="center">
+            <select class="mini-select" style="width:100px">
+              <option>ISA</option><option>연금저축</option><option selected>일반</option>
+            </select>
+          </td>
+          <td class="center">
+            <select class="mini-select" style="width:80px">
+              <option selected>월별</option><option>분기</option><option>반기</option>
+            </select>
+          </td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><div class="ticker-chip"><span class="sym">BIL</span><span class="rm">×</span></div></td>
+          <td style="font-size:12px;color:var(--muted)">SPDR 1-3M T-Bill ETF</td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="0" /></td>
+          <td class="center"><input class="mini-input" style="width:70px;text-align:center" value="0" /></td>
+          <td class="center"><input class="mini-input" style="width:110px;text-align:right" value="0" /></td>
+          <td class="center">
+            <select class="mini-select" style="width:100px">
+              <option selected>ISA</option><option>연금저축</option><option>일반</option>
+            </select>
+          </td>
+          <td class="center">
+            <select class="mini-select" style="width:80px">
+              <option selected>월별</option><option>분기</option><option>반기</option>
+            </select>
+          </td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="add-ticker-row">
+      <input type="text" placeholder="티커 추가 (예: SCHD)" />
+      <button class="btn-add">+ 추가</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:auto">비중 합계: <strong style="color:var(--text)">100%</strong></span>
+    </div>
+  </div>
+  <button class="btn-run">분석 실행</button>
+
+  <hr class="section-sep" />
+
+  <!-- ③ 시장 절대모멘텀 (VOO vs BIL) -->
+  <div class="section-header">
+    <div class="section-title">
+      <h2>시장 절대모멘텀</h2>
+      <span class="badge">VOO vs BIL</span>
+    </div>
+  </div>
+
+  <div class="abs-mom-card">
+    <div class="abs-stat">
+      <span class="lbl">VOO 252거래일 수익률</span>
+      <span class="val pos">+18.4%</span>
+      <span class="sub">S&P 500 기준</span>
+    </div>
+    <div class="abs-stat">
+      <span class="lbl">BIL 252거래일 수익률</span>
+      <span class="val" style="color:var(--muted)">+5.21%</span>
+      <span class="sub">단기국채 기준 (무위험)</span>
+    </div>
+    <div class="abs-stat">
+      <span class="lbl">초과수익률 (VOO − BIL)</span>
+      <span class="val pos">+13.19%</span>
+      <span class="sub">양수 → 시장 진입 유효</span>
+    </div>
+    <div class="abs-verdict">
+      <div class="v-label">시장 절대모멘텀 판정</div>
+      <div class="v-result">통과 — 투자 유효 구간</div>
+    </div>
+  </div>
+  <div class="abs-desc">
+    * 시장 절대모멘텀은 전략 대전제입니다. VOO − BIL 초과수익이 음수(마이너스)로 전환되면 전체 매도 시그널이 발생하며 BIL(현금성 자산)로 대피합니다.
+  </div>
+
+  <hr class="section-sep" />
+
+  <!-- ④ 섹터별 상대모멘텀 (순위) -->
+  <div class="section-header">
+    <div class="section-title">
+      <h2>섹터별 상대모멘텀</h2>
+      <span class="badge">252거래일 수익률 · 섹터 내 강한 순</span>
+    </div>
+  </div>
+
+  <div class="portfolio-panel">
+    <table class="rel-table">
+      <thead>
+        <tr>
+          <th class="center" style="width:48px">순위</th>
+          <th style="width:130px">섹터</th>
+          <th>티커 · 종목명</th>
+          <th class="right" style="width:130px">252거래일 수익률</th>
+          <th class="center" style="width:80px">절대모멘텀</th>
+          <th class="center" style="width:70px">MA200</th>
+          <th class="center" style="width:80px">Donchian</th>
+          <th class="center" style="width:110px">투자 순위</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- 인덱스 코어 -->
+        <tr style="background:rgba(79,142,247,0.04)">
+          <td class="center" style="color:var(--muted);font-size:0.75em;letter-spacing:0.5px" colspan="8">
+            ── 인덱스 코어 ──
+          </td>
+        </tr>
+        <tr>
+          <td class="center"><span class="rank-badge rank-1">1</span></td>
+          <td style="font-size:0.75em;color:#4f8ef7;font-weight:600">인덱스 코어</td>
+          <td>
+            <span style="font-weight:700">QQQ</span>
+            <span style="color:var(--muted);font-size:0.8em;margin-left:6px">Invesco QQQ Trust</span>
+          </td>
+          <td class="right"><span class="pct pos">+21.1%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><span class="pill pill-pass">55D↑</span></td>
+          <td class="center"><span style="color:var(--buy);font-weight:700">● 매수</span></td>
+        </tr>
+        <tr>
+          <td class="center"><span class="rank-badge rank-2">2</span></td>
+          <td style="font-size:0.75em;color:#4f8ef7;font-weight:600">인덱스 코어</td>
+          <td>
+            <span style="font-weight:700">VOO</span>
+            <span style="color:var(--muted);font-size:0.8em;margin-left:6px">Vanguard S&amp;P 500</span>
+          </td>
+          <td class="right"><span class="pct pos">+18.4%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><span class="pill pill-pass">55D↑</span></td>
+          <td class="center"><span style="color:var(--buy);font-weight:700">● 매수</span></td>
+        </tr>
+
+        <!-- 유망 섹터 ETF -->
+        <tr style="background:rgba(167,139,250,0.04)">
+          <td class="center" style="color:var(--muted);font-size:0.75em;letter-spacing:0.5px" colspan="8">
+            ── 유망 섹터 ETF ──
+          </td>
+        </tr>
+        <tr>
+          <td class="center"><span class="rank-badge rank-3">3</span></td>
+          <td style="font-size:0.75em;color:#a78bfa;font-weight:600">유망 섹터 ETF</td>
+          <td>
+            <span style="font-weight:700">SOXX</span>
+            <span style="color:var(--muted);font-size:0.8em;margin-left:6px">iShares Semiconductor ETF</span>
+          </td>
+          <td class="right"><span class="pct pos">+12.3%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><span class="pill pill-pass">20D↑</span></td>
+          <td class="center"><span style="color:var(--hold);font-weight:700">● 유지</span></td>
+        </tr>
+
+        <!-- 모멘텀 / 고베타 -->
+        <tr style="background:rgba(245,158,11,0.04)">
+          <td class="center" style="color:var(--muted);font-size:0.75em;letter-spacing:0.5px" colspan="8">
+            ── 모멘텀 / 고베타 ──
+          </td>
+        </tr>
+        <tr>
+          <td class="center"><span class="rank-badge rank-n">4</span></td>
+          <td style="font-size:0.75em;color:#f59e0b;font-weight:600">모멘텀/고베타</td>
+          <td>
+            <span style="font-weight:700">NVDA</span>
+            <span style="color:var(--muted);font-size:0.8em;margin-left:6px">NVIDIA Corporation</span>
+          </td>
+          <td class="right"><span class="pct pos">+35.7%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><span class="pill pill-pass">20D↑</span></td>
+          <td class="center"><span style="color:var(--hold);font-weight:700">● 유지</span></td>
+        </tr>
+        <tr>
+          <td class="center"><span class="rank-badge rank-n">5</span></td>
+          <td style="font-size:0.75em;color:#f59e0b;font-weight:600">모멘텀/고베타</td>
+          <td>
+            <span style="font-weight:700">TQQQ</span>
+            <span style="color:var(--muted);font-size:0.8em;margin-left:6px">ProShares UltraPro QQQ</span>
+          </td>
+          <td class="right"><span class="pct pos">+8.2%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><span class="pill pill-fail">20D↓</span></td>
+          <td class="center"><span style="color:var(--sell1);font-weight:700">● 1차 매도</span></td>
+        </tr>
+
+        <!-- 기타 -->
+        <tr style="background:rgba(107,114,128,0.04)">
+          <td class="center" style="color:var(--muted);font-size:0.75em;letter-spacing:0.5px" colspan="8">
+            ── 기타 (현금성) ──
+          </td>
+        </tr>
+        <tr>
+          <td class="center"><span class="rank-badge rank-n" style="opacity:0.4">—</span></td>
+          <td style="font-size:0.75em;color:var(--muted);font-weight:600">기타</td>
+          <td>
+            <span style="font-weight:700;color:var(--muted)">BIL</span>
+            <span style="color:var(--muted);font-size:0.8em;margin-left:6px">SPDR 1-3M T-Bill (기준)</span>
+          </td>
+          <td class="right"><span class="muted">+5.21%</span></td>
+          <td class="center"><span class="pill pill-na">기준</span></td>
+          <td class="center"><span class="muted">—</span></td>
+          <td class="center"><span class="muted">—</span></td>
+          <td class="center"><span class="muted">—</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="section-sep" />
+
+  <!-- ⑤ 개별 자산 데이터 (섹터별) -->
+  <div class="section-header">
+    <div class="section-title">
+      <h2>개별 자산 상세</h2>
+      <span class="badge">듀얼모멘텀 시그널</span>
+    </div>
+  </div>
+
+  <!-- 인덱스 코어 -->
+  <div class="asset-section">
+    <div class="asset-section-header">
+      <div class="sector-dot dot-core"></div>
+      <div class="asset-section-label">인덱스 코어</div>
+      <div class="asset-count">2종목</div>
+    </div>
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th>티커</th>
+          <th class="right">252거래일 수익률</th>
+          <th class="right">BIL 초과수익</th>
+          <th class="center">절대모멘텀</th>
+          <th class="center">MA200</th>
+          <th class="center">Donchian</th>
+          <th class="center">시그널</th>
+          <th class="right">현재/목표 비중</th>
+          <th class="right">월 매수금액</th>
+          <th class="center">계좌</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="t-name">VOO</div><div class="t-full">Vanguard S&amp;P 500</div></td>
+          <td class="right"><span class="pct pos">+18.4%</span></td>
+          <td class="right"><span class="pos">+13.2%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><div class="filters"><span class="pill pill-pass">55D↑</span></div></td>
+          <td class="center"><span class="signal sig-buy"><span class="sdot"></span>매수</span></td>
+          <td class="right"><div class="weight-col"><span class="weight-cur">30%</span> <span class="weight-tgt">→ 35%</span></div></td>
+          <td class="right" style="font-size:12px">150,000원</td>
+          <td class="center" style="font-size:11px;color:var(--muted)">ISA</td>
+        </tr>
+        <tr>
+          <td><div class="t-name">QQQ</div><div class="t-full">Invesco QQQ Trust</div></td>
+          <td class="right"><span class="pct pos">+21.1%</span></td>
+          <td class="right"><span class="pos">+15.9%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><div class="filters"><span class="pill pill-pass">55D↑</span></div></td>
+          <td class="center"><span class="signal sig-buy"><span class="sdot"></span>매수</span></td>
+          <td class="right"><div class="weight-col"><span class="weight-cur">25%</span> <span class="weight-tgt">→ 25%</span></div></td>
+          <td class="right" style="font-size:12px">120,000원</td>
+          <td class="center" style="font-size:11px;color:var(--muted)">ISA</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 유망 섹터 ETF -->
+  <div class="asset-section">
+    <div class="asset-section-header">
+      <div class="sector-dot dot-sector"></div>
+      <div class="asset-section-label">유망 섹터 ETF</div>
+      <div class="asset-count">1종목</div>
+    </div>
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th>티커</th>
+          <th class="right">252거래일 수익률</th>
+          <th class="right">BIL 초과수익</th>
+          <th class="center">절대모멘텀</th>
+          <th class="center">MA200</th>
+          <th class="center">Donchian</th>
+          <th class="center">시그널</th>
+          <th class="right">현재/목표 비중</th>
+          <th class="right">월 매수금액</th>
+          <th class="center">계좌</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="t-name">SOXX</div><div class="t-full">iShares Semiconductor ETF</div></td>
+          <td class="right"><span class="pct pos">+12.3%</span></td>
+          <td class="right"><span class="pos">+7.1%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><div class="filters"><span class="pill pill-pass">20D↑</span></div></td>
+          <td class="center"><span class="signal sig-hold"><span class="sdot"></span>유지</span></td>
+          <td class="right"><div class="weight-col"><span class="weight-cur">20%</span> <span class="weight-tgt">→ 20%</span></div></td>
+          <td class="right" style="font-size:12px">100,000원</td>
+          <td class="center" style="font-size:11px;color:var(--muted)">연금저축</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 모멘텀 / 고베타 -->
+  <div class="asset-section">
+    <div class="asset-section-header">
+      <div class="sector-dot dot-momentum"></div>
+      <div class="asset-section-label">모멘텀 / 고베타</div>
+      <div class="asset-count">2종목</div>
+    </div>
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th>티커</th>
+          <th class="right">252거래일 수익률</th>
+          <th class="right">BIL 초과수익</th>
+          <th class="center">절대모멘텀</th>
+          <th class="center">MA200</th>
+          <th class="center">Donchian</th>
+          <th class="center">시그널</th>
+          <th class="right">현재/목표 비중</th>
+          <th class="right">월 매수금액</th>
+          <th class="center">계좌</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="t-name">NVDA</div><div class="t-full">NVIDIA Corporation</div></td>
+          <td class="right"><span class="pct pos">+35.7%</span></td>
+          <td class="right"><span class="pos">+30.5%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><div class="filters"><span class="pill pill-pass">20D↑</span></div></td>
+          <td class="center"><span class="signal sig-hold"><span class="sdot"></span>유지</span></td>
+          <td class="right"><div class="weight-col"><span class="weight-cur">15%</span> <span class="weight-tgt">→ 10%</span></div></td>
+          <td class="right" style="font-size:12px">80,000원</td>
+          <td class="center" style="font-size:11px;color:var(--muted)">일반</td>
+        </tr>
+        <tr style="background:rgba(249,115,22,0.04)">
+          <td><div class="t-name">TQQQ</div><div class="t-full">ProShares UltraPro QQQ (3×)</div></td>
+          <td class="right"><span class="pct pos">+8.2%</span></td>
+          <td class="right"><span class="pos">+3.0%</span></td>
+          <td class="center"><span class="pill pill-pass">통과</span></td>
+          <td class="center"><span class="pill pill-pass">↑ 위</span></td>
+          <td class="center"><div class="filters"><span class="pill pill-fail">20D↓</span></div></td>
+          <td class="center"><span class="signal sig-sell1"><span class="sdot"></span>1차 매도</span></td>
+          <td class="right"><div class="weight-col"><span class="weight-cur">10%</span> <span class="weight-tgt">→ 10%</span></div></td>
+          <td class="right" style="font-size:12px">50,000원</td>
+          <td class="center" style="font-size:11px;color:var(--muted)">일반</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 기타 (BIL) -->
+  <div class="asset-section">
+    <div class="asset-section-header">
+      <div class="sector-dot dot-other"></div>
+      <div class="asset-section-label">현금성 자산</div>
+      <div class="asset-count">1종목</div>
+    </div>
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th>티커</th>
+          <th class="right">252거래일 수익률</th>
+          <th class="right">BIL 초과수익</th>
+          <th class="center">절대모멘텀</th>
+          <th class="center">MA200</th>
+          <th class="center">Donchian</th>
+          <th class="center">시그널</th>
+          <th class="right">현재/목표 비중</th>
+          <th class="right">월 매수금액</th>
+          <th class="center">계좌</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="t-name">BIL</div><div class="t-full">SPDR Bloomberg 1-3M T-Bill</div></td>
+          <td class="right"><span class="pct muted">+5.21%</span></td>
+          <td class="right"><span class="muted">기준값</span></td>
+          <td class="center"><span class="pill pill-na">기준</span></td>
+          <td class="center"><span class="muted" style="font-size:12px">—</span></td>
+          <td class="center"><span class="muted" style="font-size:12px">—</span></td>
+          <td class="center"><span class="signal sig-hold"><span class="sdot"></span>유지</span></td>
+          <td class="right"><div class="weight-col"><span class="weight-cur">0%</span> <span class="weight-tgt">→ 0%</span></div></td>
+          <td class="right" style="font-size:12px">0원</td>
+          <td class="center" style="font-size:11px;color:var(--muted)">ISA</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    * 이 대시보드는 투자 판단의 참고 도구입니다. 최종 매매 결정은 본인의 판단과 책임 하에 이루어져야 합니다.<br/>
+    * 데이터 출처: Yahoo Finance (yfinance) | 지표 계산: 서버 자체 계산 | 업데이트: 매일 장 마감 후
+  </div>
+
+</div>
+</body>
+</html>
