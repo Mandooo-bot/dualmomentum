@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { analyzePortfolio } from "@/app/lib/api";
 import type {
   AssetConfig,
@@ -13,12 +13,7 @@ import { CATEGORIES, CATEGORY_COLOR } from "@/app/lib/types";
 
 /* ── 기본 포트폴리오 ── */
 const DEFAULT_ASSETS: AssetConfig[] = [
-  { ticker: "VOO",  currentWeight: "30", targetWeight: "35", monthlyBuy: "150000", accountType: "ISA",    rebalancingPeriod: "월별", category: "인덱스 코어" },
-  { ticker: "QQQ",  currentWeight: "25", targetWeight: "25", monthlyBuy: "120000", accountType: "ISA",    rebalancingPeriod: "월별", category: "인덱스 코어" },
-  { ticker: "SOXX", currentWeight: "20", targetWeight: "20", monthlyBuy: "100000", accountType: "연금저축", rebalancingPeriod: "분기",  category: "유망 섹터 ETF" },
-  { ticker: "NVDA", currentWeight: "15", targetWeight: "10", monthlyBuy: "80000",  accountType: "일반",   rebalancingPeriod: "월별", category: "모멘텀/고베타" },
-  { ticker: "TQQQ", currentWeight: "10", targetWeight: "10", monthlyBuy: "50000",  accountType: "일반",   rebalancingPeriod: "월별", category: "모멘텀/고베타" },
-  { ticker: "BIL",  currentWeight: "0",  targetWeight: "0",  monthlyBuy: "0",      accountType: "ISA",    rebalancingPeriod: "월별", category: "기타" },
+  { ticker: "VOO", currentWeight: "100", targetWeight: "100", monthlyBuy: "0", accountType: "ISA", rebalancingPeriod: "월별", category: "인덱스 코어" },
 ];
 
 /* ── 시그널 → 스타일 ── */
@@ -56,6 +51,68 @@ function donchianPill(asset: AssetResult) {
   return <span className="pill pill-fail" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>20D↓</span>;
 }
 
+/* ── 티커 종목명 맵 ── */
+const TICKER_NAME: Record<string, string> = {
+  VOO:"Vanguard S&P 500", SPY:"SPDR S&P 500", QQQ:"Invesco QQQ (NASDAQ-100)", VTI:"Vanguard Total Market",
+  IVV:"iShares Core S&P 500", ITOT:"iShares Core Total Market", SCHB:"Schwab US Broad Market",
+  VEA:"Vanguard Dev Markets", VWO:"Vanguard EM", ACWI:"iShares MSCI ACWI", IXUS:"iShares Intl ex-US",
+  EFA:"iShares MSCI EAFE", EEM:"iShares MSCI EM", AGG:"iShares Core US Aggregate Bond",
+  BND:"Vanguard Total Bond", TLT:"iShares 20+ Year Treasury", IEF:"iShares 7-10Y Treasury",
+  SHY:"iShares 1-3Y Treasury", VGLT:"Vanguard Long-Term Treasury", VCIT:"Vanguard Corp Bond",
+  GLD:"SPDR Gold Shares", IAU:"iShares Gold Trust", SLV:"iShares Silver Trust",
+  BIL:"SPDR 1-3M T-Bill",
+  XLU:"Utilities Select Sector", VPU:"Vanguard Utilities", XLP:"Consumer Staples SPDR",
+  VDC:"Vanguard Consumer Staples", XLF:"Financials Select Sector", VFH:"Vanguard Financials",
+  VNQ:"Vanguard Real Estate", XLRE:"Real Estate Select Sector", IYR:"iShares US Real Estate",
+  XLC:"Comm Services SPDR", VOX:"Vanguard Comm Services",
+  XLI:"Industrials Select Sector", VIS:"Vanguard Industrials",
+  XLV:"Health Care Select Sector", VHT:"Vanguard Health Care", IBB:"iShares Biotech", XBI:"SPDR Biotech",
+  XLE:"Energy Select Sector", VDE:"Vanguard Energy", IYE:"iShares US Energy",
+  XLB:"Materials Select Sector", VAW:"Vanguard Materials",
+  TQQQ:"ProShares UltraPro QQQ 3x", UPRO:"ProShares UltraPro S&P 500 3x", SPXL:"Direxion Daily S&P 500 Bull 3x",
+  SOXL:"Direxion Daily Semicon Bull 3x", TECL:"Direxion Daily Technology Bull 3x", LABU:"Direxion Daily Biotech Bull 3x",
+  UDOW:"ProShares UltraPro Dow30 3x", SOXX:"iShares Semiconductor", SMH:"VanEck Semiconductor",
+  MTUM:"iShares MSCI USA Momentum", QMOM:"Alpha Architect US Quantitative Momentum",
+  VUG:"Vanguard Growth", MGK:"Vanguard Mega Cap Growth", IWF:"iShares Russell 1000 Growth",
+  SCHG:"Schwab US Large-Cap Growth", IWM:"iShares Russell 2000", VBR:"Vanguard Small-Cap Value",
+  SCHA:"Schwab US Small-Cap", VIOG:"Vanguard S&P Small-Cap 600 Growth", SPMD:"SPDR S&P 400 Mid Cap",
+  ARKK:"ARK Innovation", ARKG:"ARK Genomic Revolution", ARKW:"ARK Next Generation Internet",
+  ARKF:"ARK Fintech Innovation", ARKQ:"ARK Autonomous Tech & Robotics",
+  BOTZ:"Global X Robotics & AI", ROBO:"ROBO Global Robotics & Automation",
+  CLOU:"Global X Cloud Computing", WCLD:"WisdomTree Cloud Computing", AIQ:"Global X AI & Technology",
+  LIT:"Global X Lithium & Battery Tech", DRIV:"Global X Autonomous & EV",
+  HERO:"Global X Video Games & Esports", FINX:"Global X FinTech",
+  HACK:"ETFMG Prime Cyber Security", CIBR:"First Trust NASDAQ Cybersecurity",
+  PDBC:"Invesco Optimum Yield Diversified Commodity", DJP:"iPath Bloomberg Commodity",
+  QUAL:"iShares MSCI USA Quality Factor", VLUE:"iShares MSCI USA Value Factor",
+  USMV:"iShares MSCI USA Min Vol", BETZ:"Roundhill Sports Betting & iGaming",
+};
+
+/* ── 티커 자동 분류 ── */
+function classifyTicker(ticker: string): Category {
+  const t = ticker.toUpperCase();
+  const INDEX_CORE = new Set([
+    "VOO","SPY","QQQ","VTI","IVV","ITOT","SCHB","VEA","VWO","ACWI","IXUS","EFA","EEM",
+    "AGG","BND","TLT","IEF","SHY","VGLT","VCIT","GLD","IAU","SLV","BIL",
+  ]);
+  const INFRA = new Set([
+    "XLU","VPU","XLP","VDC","XLF","VFH","VNQ","XLRE","IYR","XLC","VOX",
+    "XLI","VIS","XLV","VHT","IBB","XBI","XLE","VDE","IYE","XLB","VAW",
+  ]);
+  const MOMENTUM = new Set([
+    "TQQQ","UPRO","SPXL","SOXL","TECL","LABU","UDOW","SOXX","SMH","MTUM","QMOM",
+    "VUG","MGK","IWF","SCHG","IWM","VBR","SCHA","VIOG","SPMD",
+  ]);
+  const ALPHA = new Set([
+    "ARKK","ARKG","ARKW","ARKF","ARKQ","BOTZ","ROBO","CLOU","WCLD","AIQ",
+    "LIT","DRIV","HERO","FINX","HACK","CIBR","PDBC","DJP","QUAL","VLUE","USMV","BETZ",
+  ]);
+  if (INDEX_CORE.has(t)) return "인덱스 코어";
+  if (INFRA.has(t))      return "시스템/인프라섹터";
+  if (MOMENTUM.has(t))   return "모멘텀/고베타";
+  return "알파 후보";
+}
+
 /* ── 순위 배지 ── */
 function rankBadge(rank: number) {
   const cls = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "rank-n";
@@ -78,6 +135,7 @@ export default function Dashboard() {
   const [kakaoNotify, setKakaoNotify] = useState(true);
   const [assets, setAssets] = useState<AssetConfig[]>(DEFAULT_ASSETS);
   const [addInput, setAddInput] = useState("");
+  const [addCategory, setAddCategory] = useState<Category>("알파 후보");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +155,10 @@ export default function Dashboard() {
     if (!t || assets.some(a => a.ticker === t)) return;
     setAssets(prev => [...prev, {
       ticker: t, currentWeight: "0", targetWeight: "0",
-      monthlyBuy: "0", accountType: "ISA", rebalancingPeriod: "월별", category: "기타",
+      monthlyBuy: "0", accountType: "ISA", rebalancingPeriod: "월별", category: addCategory,
     }]);
     setAddInput("");
+    setAddCategory("알파 후보");
   }
 
   /* ── 분석 실행 ── */
@@ -122,6 +181,11 @@ export default function Dashboard() {
   const resultMap = new Map<string, AssetResult>(
     result?.assets.map(a => [a.ticker, a]) ?? []
   );
+
+  /* ── 유효 카테고리 (항상 ticker 기준 자동 분류) ── */
+  function effectiveCategory(a: AssetConfig): Category {
+    return classifyTicker(a.ticker);
+  }
 
   /* ── 비중 합계 ── */
   const weightSum = assets.reduce((s, a) => s + (parseFloat(a.currentWeight) || 0), 0);
@@ -249,8 +313,8 @@ export default function Dashboard() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["티커", "카테고리", "현재 비중 (%)", "목표 비중 (%)", "월 매수 금액", "계좌 종류", "리밸런싱 주기", ""].map((h, i) => (
-                  <th key={i} style={{ background: "var(--surface2)", padding: "9px 14px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: i >= 2 && i <= 6 ? "center" : "left", letterSpacing: "0.4px" }}>{h}</th>
+                {["티커", "현재 비중 (%)", "목표 비중 (%)", "월 매수 금액", "계좌 종류", "리밸런싱 주기", ""].map((h, i) => (
+                  <th key={i} style={{ background: "var(--surface2)", padding: "9px 14px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: i >= 1 && i <= 5 ? "center" : "left", letterSpacing: "0.4px" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -262,12 +326,6 @@ export default function Dashboard() {
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{asset.ticker}</span>
                       <span onClick={() => removeAsset(asset.ticker)} style={{ color: "var(--muted)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</span>
                     </div>
-                  </td>
-                  <td style={{ padding: "10px 14px" }}>
-                    <select value={asset.category} onChange={e => updateAsset(idx, "category", e.target.value)}
-                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: CATEGORY_COLOR[asset.category as keyof typeof CATEGORY_COLOR], padding: "5px 9px", fontSize: 11, outline: "none", fontWeight: 600 }}>
-                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
                   </td>
                   <td style={{ padding: "10px 14px", textAlign: "center" }}>
                     <input value={asset.currentWeight} onChange={e => updateAsset(idx, "currentWeight", e.target.value)}
@@ -301,10 +359,18 @@ export default function Dashboard() {
 
           {/* 티커 추가 행 */}
           <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 14px", borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.01)" }}>
-            <input value={addInput} onChange={e => setAddInput(e.target.value)}
+            <input value={addInput}
+              onChange={e => {
+                setAddInput(e.target.value);
+                setAddCategory(classifyTicker(e.target.value));
+              }}
               onKeyDown={e => e.key === "Enter" && addAsset()}
               placeholder="티커 추가 (예: SCHD)"
               style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "6px 10px", fontSize: 12, outline: "none", width: 160 }} />
+            <select value={addCategory} onChange={e => setAddCategory(e.target.value as Category)}
+              style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "6px 10px", fontSize: 12, outline: "none" }}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <button onClick={addAsset}
               style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>
               + 추가
@@ -375,50 +441,66 @@ export default function Dashboard() {
 
             <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
 
-            {/* ④ 섹터별 상대모멘텀 */}
+            {/* ④ 섹터별 상대모멘텀 + 개별 자산 상세 (통합) */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700 }}>섹터별 상대모멘텀</h2>
-              <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>252거래일 수익률 · 섹터 내 강한 순</span>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>포트폴리오 시그널</h2>
+              <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>섹터별 상대모멘텀 · 듀얼모멘텀 시그널</span>
             </div>
 
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["순위", "섹터", "티커 · 종목명", "252거래일 수익률", "절대모멘텀", "MA200", "Donchian", "투자 순위"].map((h, i) => (
-                      <th key={i} style={{ padding: "8px 14px", fontSize: 11, color: "var(--muted)", fontWeight: 600, textAlign: i === 0 || i >= 4 ? "center" : i === 3 ? "right" : "left", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                    {["순위", "섹터", "티커", "종목명", "252거래일 수익률", "절대모멘텀", "SMA200", "Donchian", "현재/목표 비중", "투자시그널"].map((h, i) => (
+                      <th key={i} style={{
+                        padding: "9px 12px", fontSize: 11, color: "var(--muted)", fontWeight: 600,
+                        textAlign: i === 0 || (i >= 5 && i <= 8) ? "center" : i === 4 ? "right" : "left",
+                        borderBottom: "1px solid var(--border)", whiteSpace: "nowrap",
+                      }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {CATEGORIES.map(cat => {
-                    const catAssets = assets.filter(a => a.category === cat);
+                    const catAssets = assets.filter(a => effectiveCategory(a) === cat);
                     if (!catAssets.length) return null;
-                    const catResults = catAssets.map(a => resultMap.get(a.ticker)).filter(Boolean) as AssetResult[];
-                    catResults.sort((a, b) => b.return_252d - a.return_252d);
+                    const catPairs = catAssets
+                      .map(a => ({ cfg: a, ar: resultMap.get(a.ticker) }))
+                      .filter(x => x.ar) as { cfg: AssetConfig; ar: AssetResult }[];
+                    catPairs.sort((a, b) => b.ar.return_252d - a.ar.return_252d);
+                    if (!catPairs.length) return null;
                     return (
-                      <>
-                        <tr key={`sep-${cat}`} style={{ background: `rgba(${cat === "인덱스 코어" ? "79,142,247" : cat === "유망 섹터 ETF" ? "167,139,250" : cat === "알파 후보" ? "52,211,153" : cat === "모멘텀/고베타" ? "245,158,11" : "107,114,128"},0.04)` }}>
-                          <td colSpan={8} style={{ padding: "7px 14px", fontSize: "0.75em", color: "var(--muted)", letterSpacing: "0.5px", textAlign: "center" }}>
+                      <React.Fragment key={cat}>
+                        <tr style={{ background: `rgba(${cat === "인덱스 코어" ? "79,142,247" : cat === "시스템/인프라섹터" ? "167,139,250" : cat === "모멘텀/고베타" ? "245,158,11" : "52,211,153"},0.04)` }}>
+                          <td colSpan={10} style={{ padding: "7px 14px", fontSize: "0.75em", color: "var(--muted)", letterSpacing: "0.5px", textAlign: "center" }}>
                             ── {cat} ──
                           </td>
                         </tr>
-                        {catResults.map((ar, i) => (
-                          <tr key={ar.ticker}>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}>{rankBadge(i + 1)}</td>
-                            <td style={{ padding: "11px 14px", fontSize: "0.75em", color: CATEGORY_COLOR[cat], fontWeight: 600 }}>{cat}</td>
-                            <td style={{ padding: "11px 14px" }}>
-                              <span style={{ fontWeight: 700 }}>{ar.ticker}</span>
+                        {catPairs.map(({ cfg, ar }, i) => (
+                          <tr key={ar.ticker} style={{ borderTop: "1px solid var(--border)" }}>
+                            <td style={{ padding: "11px 12px", textAlign: "center" }}>{rankBadge(i + 1)}</td>
+                            <td style={{ padding: "11px 12px", fontSize: "0.72em", color: CATEGORY_COLOR[cat], fontWeight: 600, whiteSpace: "nowrap" }}>{cat}</td>
+                            <td style={{ padding: "11px 12px", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap" }}>{ar.ticker}</td>
+                            <td style={{ padding: "11px 12px", fontSize: 11, color: "var(--muted)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {TICKER_NAME[ar.ticker] ?? "—"}
                             </td>
-                            <td style={{ padding: "11px 14px", textAlign: "right" }}>
-                              <span style={{ fontWeight: 600, color: ar.return_252d >= 0 ? "var(--buy)" : "var(--sell)" }}>{ar.return_252d >= 0 ? "+" : ""}{ar.return_252d.toFixed(2)}%</span>
+                            <td style={{ padding: "11px 12px", textAlign: "right", whiteSpace: "nowrap" }}>
+                              <span style={{ fontWeight: 600, color: ar.return_252d >= 0 ? "var(--buy)" : "var(--sell)" }}>
+                                {ar.return_252d >= 0 ? "+" : ""}{ar.return_252d.toFixed(2)}%
+                              </span>
                             </td>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}>
-                              <span className={`pill ${ar.excess_return >= 0 ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{ar.excess_return >= 0 ? "통과" : "미통과"}</span>
+                            <td style={{ padding: "11px 12px", textAlign: "center" }}>
+                              <span className={`pill ${ar.excess_return >= 0 ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>
+                                {ar.excess_return >= 0 ? "통과" : "미통과"}
+                              </span>
                             </td>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}>{ma200Pill(ar)}</td>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}>{donchianPill(ar)}</td>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                            <td style={{ padding: "11px 12px", textAlign: "center" }}>{ma200Pill(ar)}</td>
+                            <td style={{ padding: "11px 12px", textAlign: "center" }}>{donchianPill(ar)}</td>
+                            <td style={{ padding: "11px 12px", textAlign: "center", fontSize: 12, whiteSpace: "nowrap" }}>
+                              <span style={{ fontWeight: 600 }}>{cfg.currentWeight}%</span>
+                              <span style={{ color: "var(--muted)", fontSize: 11 }}> / {cfg.targetWeight}%</span>
+                            </td>
+                            <td style={{ padding: "11px 12px", textAlign: "center" }}>
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700 }} className={signalClass(ar.signal as Signal)}>
                                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: signalDotColor(ar.signal as Signal), display: "inline-block" }} />
                                 {ar.signal}
@@ -426,90 +508,26 @@ export default function Dashboard() {
                             </td>
                           </tr>
                         ))}
-                        {/* BIL 행은 기타 섹터에 표시 */}
-                        {cat === "기타" && (
-                          <tr>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}><span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 6, fontSize: 12, fontWeight: 700, background: "var(--surface2)", color: "var(--muted)", opacity: 0.4 }}>—</span></td>
-                            <td style={{ padding: "11px 14px", fontSize: "0.75em", color: "var(--muted)", fontWeight: 600 }}>기타</td>
-                            <td style={{ padding: "11px 14px" }}><span style={{ fontWeight: 700, color: "var(--muted)" }}>BIL</span><span style={{ color: "var(--muted)", fontSize: "0.8em", marginLeft: 6 }}>SPDR 1-3M T-Bill (기준)</span></td>
-                            <td style={{ padding: "11px 14px", textAlign: "right" }}><span style={{ color: "var(--muted)" }}>+{result.bil_return_252d.toFixed(2)}%</span></td>
-                            <td style={{ padding: "11px 14px", textAlign: "center" }}><span className="pill pill-na" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>기준</span></td>
-                            <td colSpan={3} style={{ padding: "11px 14px", textAlign: "center", color: "var(--muted)" }}>—</td>
-                          </tr>
-                        )}
-                      </>
+                      </React.Fragment>
                     );
                   })}
+                  {/* BIL 기준선 */}
+                  <tr style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "11px 12px", textAlign: "center" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 6, fontSize: 12, fontWeight: 700, background: "var(--surface2)", color: "var(--muted)", opacity: 0.4 }}>—</span>
+                    </td>
+                    <td style={{ padding: "11px 12px", fontSize: "0.72em", color: "var(--muted)", fontWeight: 600 }}>기준선</td>
+                    <td style={{ padding: "11px 12px", fontWeight: 700, color: "var(--muted)" }}>BIL</td>
+                    <td style={{ padding: "11px 12px", fontSize: 11, color: "var(--muted)" }}>SPDR 1-3M T-Bill (무위험 기준)</td>
+                    <td style={{ padding: "11px 12px", textAlign: "right", color: "var(--muted)" }}>+{result.bil_return_252d.toFixed(2)}%</td>
+                    <td style={{ padding: "11px 12px", textAlign: "center" }}>
+                      <span className="pill pill-na" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>기준</span>
+                    </td>
+                    <td colSpan={4} style={{ padding: "11px 12px", textAlign: "center", color: "var(--muted)" }}>—</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
-
-            <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
-
-            {/* ⑤ 개별 자산 상세 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700 }}>개별 자산 상세</h2>
-              <span style={{ fontSize: 11, background: "var(--surface2)", color: "var(--muted)", padding: "2px 8px", borderRadius: 10 }}>듀얼모멘텀 시그널</span>
-            </div>
-
-            {CATEGORIES.map(cat => {
-              const catAssets = assets.filter(a => a.category === cat);
-              if (!catAssets.length) return null;
-              const catResults = catAssets.map(a => ({ cfg: a, res: resultMap.get(a.ticker) })).filter(x => x.res);
-              if (!catResults.length) return null;
-              return (
-                <div key={cat} style={{ marginBottom: 28 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: CATEGORY_COLOR[cat], display: "inline-block" }} />
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{cat}</span>
-                    <span style={{ fontSize: 11, color: "var(--muted)", background: "var(--surface2)", padding: "2px 8px", borderRadius: 10 }}>{catResults.length}종목</span>
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr>
-                        {["티커", "252거래일 수익률", "BIL 초과수익", "절대모멘텀", "MA200", "Donchian", "시그널", "현재/목표 비중", "월 매수금액", "계좌"].map((h, i) => (
-                          <th key={i} style={{ padding: "7px 12px", fontSize: 11, color: "var(--muted)", fontWeight: 500, textAlign: i === 0 ? "left" : i >= 3 && i <= 6 ? "center" : "right", borderBottom: "1px solid var(--border)" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {catResults.map(({ cfg, res: ar }) => (
-                        <tr key={cfg.ticker}>
-                          <td style={{ padding: "11px 12px", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            <div style={{ fontWeight: 700, fontSize: 13 }}>{cfg.ticker}</div>
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "right", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            <span style={{ fontWeight: 600, color: ar!.return_252d >= 0 ? "var(--buy)" : "var(--sell)" }}>{ar!.return_252d >= 0 ? "+" : ""}{ar!.return_252d.toFixed(2)}%</span>
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "right", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            <span style={{ color: ar!.excess_return >= 0 ? "var(--buy)" : "var(--sell)" }}>{ar!.excess_return >= 0 ? "+" : ""}{ar!.excess_return.toFixed(2)}%</span>
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            <span className={`pill ${ar!.excess_return >= 0 ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{ar!.excess_return >= 0 ? "통과" : "미통과"}</span>
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>{ma200Pill(ar!)}</td>
-                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>{donchianPill(ar!)}</td>
-                          <td style={{ padding: "11px 12px", textAlign: "center", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700 }} className={signalClass(ar!.signal as Signal)}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: signalDotColor(ar!.signal as Signal), display: "inline-block" }} />
-                              {ar!.signal}
-                            </span>
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "right", fontSize: 12, borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            <span style={{ fontWeight: 600 }}>{cfg.currentWeight}%</span>
-                            <span style={{ color: "var(--muted)", fontSize: 11 }}> → {cfg.targetWeight}%</span>
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "right", fontSize: 12, borderBottom: "1px solid rgba(46,49,72,0.4)" }}>
-                            {parseInt(cfg.monthlyBuy).toLocaleString()}{currency === "KRW" ? "원" : "$"}
-                          </td>
-                          <td style={{ padding: "11px 12px", textAlign: "right", fontSize: 11, color: "var(--muted)", borderBottom: "1px solid rgba(46,49,72,0.4)" }}>{cfg.accountType}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
 
             {/* API 오류 목록 */}
             {result.errors.length > 0 && (

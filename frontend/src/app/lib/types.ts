@@ -30,23 +30,20 @@ export interface AssetConfig {
 
 export type Category =
   | "인덱스 코어"
-  | "유망 섹터 ETF"
-  | "알파 후보"
+  | "시스템/인프라섹터"
   | "모멘텀/고베타"
-  | "기타";
+  | "알파 후보";
 
 export const CATEGORY_COLOR: Record<Category, string> = {
-  "인덱스 코어": "#4f8ef7",
-  "유망 섹터 ETF": "#a78bfa",
-  "알파 후보": "#34d399",
-  "모멘텀/고베타": "#f59e0b",
-  "기타": "#6b7280",
+  "인덱스 코어":    "#4f8ef7",
+  "시스템/인프라섹터": "#a78bfa",
+  "모멘텀/고베타":  "#f59e0b",
+  "알파 후보":     "#34d399",
 };
 
 export const CATEGORIES: Category[] = [
   "인덱스 코어",
-  "유망 섹터 ETF",
-  "알파 후보",
+  "시스템/인프라섹터",
   "모멘텀/고베타",
-  "기타",
+  "알파 후보",
 ];

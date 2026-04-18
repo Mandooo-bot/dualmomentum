@@ -9,17 +9,17 @@ def ma200(close: pd.Series) -> float:
 
 
 def donchian_upper(high: pd.Series, window: int = 55) -> float:
-    """Donchian Channel 상단: 최근 window 거래일 최고가"""
-    if len(high) < window:
+    """Donchian Channel 상단: 직전 window 거래일 최고가 (오늘 제외)"""
+    if len(high) < window + 1:
         raise ValueError(f"Donchian {window}d 계산에 데이터가 부족합니다.")
-    return float(high.iloc[-window:].max())
+    return float(high.iloc[-(window + 1):-1].max())
 
 
 def donchian_lower(low: pd.Series, window: int = 20) -> float:
-    """Donchian Channel 하단: 최근 window 거래일 최저가"""
-    if len(low) < window:
+    """Donchian Channel 하단: 직전 window 거래일 최저가 (오늘 제외)"""
+    if len(low) < window + 1:
         raise ValueError(f"Donchian {window}d 계산에 데이터가 부족합니다.")
-    return float(low.iloc[-window:].min())
+    return float(low.iloc[-(window + 1):-1].min())
 
 
 def return_252d(close: pd.Series) -> float:
