@@ -16,3 +16,11 @@ export async function analyzePortfolio(
   }
   return res.json();
 }
+
+export async function sendSellNotification(signals: object[]): Promise<void> {
+  await fetch(`${API_BASE}/api/notify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ signals }),
+  });
+}

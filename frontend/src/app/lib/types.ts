@@ -32,13 +32,19 @@ export type Category =
   | "인덱스 코어"
   | "시스템/인프라섹터"
   | "모멘텀/고베타"
-  | "알파 후보";
+  | "알파 후보"
+  | "개별주1"
+  | "개별주2"
+  | "개별주3";
 
 export const CATEGORY_COLOR: Record<Category, string> = {
-  "인덱스 코어":    "#4f8ef7",
+  "인덱스 코어":      "#4f8ef7",
   "시스템/인프라섹터": "#a78bfa",
-  "모멘텀/고베타":  "#f59e0b",
-  "알파 후보":     "#34d399",
+  "모멘텀/고베타":    "#f59e0b",
+  "알파 후보":       "#34d399",
+  "개별주1":         "#f87171",
+  "개별주2":         "#fb923c",
+  "개별주3":         "#e879f9",
 };
 
 export const CATEGORIES: Category[] = [
@@ -46,4 +52,9 @@ export const CATEGORIES: Category[] = [
   "시스템/인프라섹터",
   "모멘텀/고베타",
   "알파 후보",
+  "개별주1",
+  "개별주2",
+  "개별주3",
 ];
+
+export const MANUAL_CATEGORIES = new Set<Category>(["개별주1", "개별주2", "개별주3"]);

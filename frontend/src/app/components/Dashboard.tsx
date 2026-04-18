@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { analyzePortfolio } from "@/app/lib/api";
+import React, { useState, useEffect } from "react";
+import { analyzePortfolio, sendSellNotification } from "@/app/lib/api";
 import type {
   AssetConfig,
   AssetResult,
@@ -9,7 +9,7 @@ import type {
   Category,
   Signal,
 } from "@/app/lib/types";
-import { CATEGORIES, CATEGORY_COLOR } from "@/app/lib/types";
+import { CATEGORIES, CATEGORY_COLOR, MANUAL_CATEGORIES } from "@/app/lib/types";
 
 /* ── 기본 포트폴리오 ── */
 const DEFAULT_ASSETS: AssetConfig[] = [
@@ -129,17 +129,49 @@ function rankBadge(rank: number) {
   );
 }
 
+const STORAGE_KEY = "dm_portfolio";
+const HISTORY_KEY = "dm_signal_history";
+const MAX_HISTORY = 30;
+
+type HistoryEntry = {
+  date: string;
+  assets: { ticker: string; signal: string; return_252d: number; excess_return: number }[];
+};
+
 /* ── 메인 컴포넌트 ── */
 export default function Dashboard() {
   const [currency, setCurrency] = useState<"KRW" | "USD">("KRW");
-  const [kakaoNotify, setKakaoNotify] = useState(true);
   const [assets, setAssets] = useState<AssetConfig[]>(DEFAULT_ASSETS);
+  const [hydrated, setHydrated] = useState(false);
   const [addInput, setAddInput] = useState("");
   const [addCategory, setAddCategory] = useState<Category>("알파 후보");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"대시보드" | "시그널 이력" | "설정">("대시보드");
+  const [signalHistory, setSignalHistory] = useState<HistoryEntry[]>([]);
+  const [expandedHistory, setExpandedHistory] = useState<number | null>(0);
+
+  /* ── localStorage 불러오기 (최초 마운트) ── */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const { assets: a, currency: c } = JSON.parse(saved);
+        if (Array.isArray(a) && a.length > 0) setAssets(a);
+        if (c === "KRW" || c === "USD") setCurrency(c);
+      }
+      const hist = localStorage.getItem(HISTORY_KEY);
+      if (hist) setSignalHistory(JSON.parse(hist));
+    } catch {}
+    setHydrated(true);
+  }, []);
+
+  /* ── localStorage 자동 저장 (변경 시마다) ── */
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ assets, currency }));
+  }, [assets, currency, hydrated]);
 
   /* ── 포트폴리오 입력 핸들러 ── */
   function updateAsset(idx: number, field: keyof AssetConfig, value: string) {
@@ -170,6 +202,33 @@ export default function Dashboard() {
       const tickers = assets.map(a => a.ticker);
       const data = await analyzePortfolio(tickers);
       setResult(data);
+
+      // 매도 시그널 발생 시 이메일 발송 (분석 실행마다)
+      const SELL_SIGNALS = new Set(["1차매도", "전체매도"]);
+      const sells = data.assets.filter(a => SELL_SIGNALS.has(a.signal));
+      if (sells.length > 0) {
+        sendSellNotification(sells.map(a => ({
+          ticker: a.ticker,
+          signal: a.signal,
+          return_252d: a.return_252d,
+          excess_return: a.excess_return,
+        }))).catch(() => {});
+      }
+
+      // 시그널 이력 저장
+      const newEntry: HistoryEntry = {
+        date: new Date().toISOString().slice(0, 16).replace("T", " "),
+        assets: data.assets.map(a => ({
+          ticker: a.ticker, signal: a.signal,
+          return_252d: a.return_252d, excess_return: a.excess_return,
+        })),
+      };
+      setSignalHistory(prev => {
+        const updated = [newEntry, ...prev].slice(0, MAX_HISTORY);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+        return updated;
+      });
+
     } catch (e) {
       setError(e instanceof Error ? e.message : "알 수 없는 오류");
     } finally {
@@ -182,9 +241,9 @@ export default function Dashboard() {
     result?.assets.map(a => [a.ticker, a]) ?? []
   );
 
-  /* ── 유효 카테고리 (항상 ticker 기준 자동 분류) ── */
+  /* ── 유효 카테고리 (저장된 값 우선, 없으면 자동 분류) ── */
   function effectiveCategory(a: AssetConfig): Category {
-    return classifyTicker(a.ticker);
+    return a.category ?? classifyTicker(a.ticker);
   }
 
   /* ── 비중 합계 ── */
@@ -197,29 +256,16 @@ export default function Dashboard() {
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
 
       {/* ── TOP BAR ── */}
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "0 32px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <span style={{ fontSize: 11, color: "var(--muted)" }}>기준 통화</span>
-          <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
-            {(["KRW", "USD"] as const).map(c => (
-              <button key={c} onClick={() => setCurrency(c)}
-                style={{ background: currency === c ? "var(--accent)" : "none", border: "none", color: currency === c ? "#fff" : "var(--muted)", padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
-                {c === "KRW" ? "원 KRW" : "달러 USD"}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--muted)" }}>
-            <div onClick={() => setKakaoNotify(v => !v)}
-              style={{ width: 32, height: 18, background: kakaoNotify ? "#FEE500" : "var(--border)", borderRadius: 9, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
-              <span style={{ position: "absolute", top: 3, left: kakaoNotify ? 17 : 3, width: 12, height: 12, background: "#fff", borderRadius: "50%", transition: "left 0.2s", display: "block" }} />
-            </div>
-            <span>카카오톡 시그널 알림 {kakaoNotify ? "ON" : "OFF"}</span>
-          </div>
+      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "0 32px", height: 48, display: "flex", alignItems: "center", gap: 20 }}>
+        <span style={{ fontSize: 11, color: "var(--muted)" }}>기준 통화</span>
+        <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+          {(["KRW", "USD"] as const).map(c => (
+            <button key={c} onClick={() => setCurrency(c)}
+              style={{ background: currency === c ? "var(--accent)" : "none", border: "none", color: currency === c ? "#fff" : "var(--muted)", padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
+              {c === "KRW" ? "원 KRW" : "달러 USD"}
+            </button>
+          ))}
         </div>
-        <button style={{ display: "flex", alignItems: "center", gap: 7, background: "#FEE500", color: "#191919", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#191919"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.6 5.1 4 6.6l-1 3.6 4.1-2.7c.9.2 1.9.3 2.9.3 5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/></svg>
-          카카오로 로그인
-        </button>
       </div>
 
       {/* ── NAV ── */}
@@ -238,6 +284,103 @@ export default function Dashboard() {
       </nav>
 
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 24px" }}>
+
+        {/* ── 시그널 이력 탭 ── */}
+        {activeTab === "시그널 이력" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700 }}>시그널 이력</h2>
+              {signalHistory.length > 0 && (
+                <button onClick={() => {
+                  localStorage.removeItem(HISTORY_KEY);
+                  setSignalHistory([]);
+                }} style={{ background: "none", border: "1px solid var(--border)", color: "var(--muted)", borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer" }}>
+                  이력 초기화
+                </button>
+              )}
+            </div>
+            {signalHistory.length === 0 ? (
+              <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "40px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+                아직 분석 이력이 없습니다. 대시보드에서 분석을 실행하면 여기에 기록됩니다.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {signalHistory.map((entry, ei) => {
+                  const buy   = entry.assets.filter(a => a.signal === "매수").length;
+                  const hold  = entry.assets.filter(a => a.signal === "유지").length;
+                  const sell1 = entry.assets.filter(a => a.signal === "1차매도").length;
+                  const sell  = entry.assets.filter(a => a.signal === "전체매도").length;
+                  const total = entry.assets.length;
+                  const isOpen = expandedHistory === ei;
+                  return (
+                    <div key={ei} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", background: "var(--surface2)", borderBottom: isOpen ? "1px solid var(--border)" : "none" }}>
+                        <button onClick={() => setExpandedHistory(isOpen ? null : ei)}
+                          style={{ flex: 1, background: "none", border: "none", padding: "12px 16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{entry.date}</span>
+                            <span style={{ fontSize: 11, color: "var(--muted)" }}>전체 {total}종목</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {buy   > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--buy)",   background: "rgba(34,197,94,0.12)",   borderRadius: 4, padding: "2px 8px" }}>매수 {buy}</span>}
+                            {hold  > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--hold)",  background: "rgba(148,163,184,0.12)", borderRadius: 4, padding: "2px 8px" }}>유지 {hold}</span>}
+                            {sell1 > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--sell1)", background: "rgba(251,146,60,0.12)",  borderRadius: 4, padding: "2px 8px" }}>1차매도 {sell1}</span>}
+                            {sell  > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--sell)",  background: "rgba(239,68,68,0.12)",  borderRadius: 4, padding: "2px 8px" }}>전체매도 {sell}</span>}
+                            <span style={{ fontSize: 12, color: "var(--muted)", marginLeft: 4 }}>{isOpen ? "▲" : "▼"}</span>
+                          </div>
+                        </button>
+                        <button onClick={() => {
+                          setSignalHistory(prev => {
+                            const updated = prev.filter((_, i) => i !== ei);
+                            localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+                            return updated;
+                          });
+                          if (expandedHistory === ei) setExpandedHistory(null);
+                        }} style={{ background: "none", border: "none", color: "var(--muted)", padding: "12px 14px", cursor: "pointer", fontSize: 16, lineHeight: 1 }} title="삭제">
+                          ×
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                          <thead>
+                            <tr>
+                              {["티커", "252거래일 수익률", "절대모멘텀", "시그널"].map((h, i) => (
+                                <th key={i} style={{ padding: "8px 14px", fontSize: 11, color: "var(--muted)", fontWeight: 600, textAlign: i === 0 ? "left" : "center", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...entry.assets].sort((a, b) => b.return_252d - a.return_252d).map((a, ai) => (
+                              <tr key={ai} style={{ borderTop: ai > 0 ? "1px solid var(--border)" : "none" }}>
+                                <td style={{ padding: "9px 14px", fontWeight: 700, fontSize: 13 }}>{a.ticker}</td>
+                                <td style={{ padding: "9px 14px", textAlign: "center", color: a.return_252d >= 0 ? "var(--buy)" : "var(--sell)", fontWeight: 600 }}>
+                                  {a.return_252d >= 0 ? "+" : ""}{a.return_252d.toFixed(2)}%
+                                </td>
+                                <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                                  <span className={`pill ${a.excess_return >= 0 ? "pill-pass" : "pill-fail"}`} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>
+                                    {a.excess_return >= 0 ? "통과" : "미통과"}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700 }} className={signalClass(a.signal as Signal)}>
+                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: signalDotColor(a.signal as Signal), display: "inline-block" }} />
+                                    {a.signal}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab !== "대시보드" ? null : <>
 
         {/* ① 전략 소개 */}
         <div style={{ marginBottom: 28 }}>
@@ -313,8 +456,8 @@ export default function Dashboard() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["티커", "현재 비중 (%)", "목표 비중 (%)", "월 매수 금액", "계좌 종류", "리밸런싱 주기", ""].map((h, i) => (
-                  <th key={i} style={{ background: "var(--surface2)", padding: "9px 14px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: i >= 1 && i <= 5 ? "center" : "left", letterSpacing: "0.4px" }}>{h}</th>
+                {["티커", "섹터", "현재 비중 (%)", "목표 비중 (%)", "월 매수 금액", "계좌 종류", "리밸런싱 주기", ""].map((h, i) => (
+                  <th key={i} style={{ background: "var(--surface2)", padding: "9px 14px", fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: i >= 2 && i <= 6 ? "center" : "left", letterSpacing: "0.4px" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -326,6 +469,12 @@ export default function Dashboard() {
                       <span style={{ fontWeight: 700, fontSize: 13 }}>{asset.ticker}</span>
                       <span onClick={() => removeAsset(asset.ticker)} style={{ color: "var(--muted)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</span>
                     </div>
+                  </td>
+                  <td style={{ padding: "10px 14px" }}>
+                    <select value={effectiveCategory(asset)} onChange={e => updateAsset(idx, "category", e.target.value)}
+                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: CATEGORY_COLOR[effectiveCategory(asset)], padding: "5px 9px", fontSize: 11, outline: "none", fontWeight: 600 }}>
+                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
                   </td>
                   <td style={{ padding: "10px 14px", textAlign: "center" }}>
                     <input value={asset.currentWeight} onChange={e => updateAsset(idx, "currentWeight", e.target.value)}
@@ -367,10 +516,6 @@ export default function Dashboard() {
               onKeyDown={e => e.key === "Enter" && addAsset()}
               placeholder="티커 추가 (예: SCHD)"
               style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "6px 10px", fontSize: 12, outline: "none", width: 160 }} />
-            <select value={addCategory} onChange={e => setAddCategory(e.target.value as Category)}
-              style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", padding: "6px 10px", fontSize: 12, outline: "none" }}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
             <button onClick={addAsset}
               style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>
               + 추가
@@ -546,6 +691,8 @@ export default function Dashboard() {
           * 이 대시보드는 투자 판단의 참고 도구입니다. 최종 매매 결정은 본인의 판단과 책임 하에 이루어져야 합니다.<br />
           * 데이터 출처: Yahoo Finance (yfinance) | 지표 계산: 서버 자체 계산 | 업데이트: 매일 장 마감 후
         </div>
+
+        </>}
       </div>
     </div>
   );
