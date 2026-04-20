@@ -24,3 +24,21 @@ export async function sendSellNotification(signals: object[]): Promise<void> {
     body: JSON.stringify({ signals }),
   });
 }
+
+export async function loadPortfolio(): Promise<{ assets: object[]; currency: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/portfolio`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function savePortfolio(assets: object[], currency: string): Promise<void> {
+  await fetch(`${API_BASE}/api/portfolio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assets, currency }),
+  }).catch(() => {});
+}

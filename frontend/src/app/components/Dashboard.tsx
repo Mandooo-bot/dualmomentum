@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { analyzePortfolio, sendSellNotification } from "@/app/lib/api";
-import { supabase, USER_ID } from "@/app/lib/supabase";
+import { analyzePortfolio, sendSellNotification, loadPortfolio, savePortfolio } from "@/app/lib/api";
 import type {
   AssetConfig,
   AssetResult,
@@ -169,18 +168,13 @@ export default function Dashboard() {
     } catch {}
     setHydrated(true);
 
-    supabase
-      .from("portfolios")
-      .select("assets, currency")
-      .eq("user_id", USER_ID)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          if (Array.isArray(data.assets) && data.assets.length > 0) setAssets(data.assets);
-          if (data.currency === "KRW" || data.currency === "USD") setCurrency(data.currency);
-        }
-        supabaseLoaded.current = true;
-      });
+    loadPortfolio().then(data => {
+      if (data) {
+        if (Array.isArray(data.assets) && data.assets.length > 0) setAssets(data.assets as AssetConfig[]);
+        if (data.currency === "KRW" || data.currency === "USD") setCurrency(data.currency);
+      }
+      supabaseLoaded.current = true;
+    });
   }, []);
 
   /* ── 저장: localStorage(즉시) + Supabase(비동기) ── */
@@ -188,10 +182,7 @@ export default function Dashboard() {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ assets, currency }));
     if (!supabaseLoaded.current) return;
-    supabase.from("portfolios").upsert(
-      { user_id: USER_ID, assets, currency, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    );
+    savePortfolio(assets, currency);
   }, [assets, currency, hydrated]);
 
   /* ── 포트폴리오 입력 핸들러 ── */
