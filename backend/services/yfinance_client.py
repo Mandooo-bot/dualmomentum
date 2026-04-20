@@ -1,32 +1,45 @@
-import yfinance as yf
+import os
+import httpx
 import pandas as pd
 from datetime import datetime, timedelta
+
+
+def _fetch_tiingo(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
+    token = os.getenv("TIINGO_TOKEN", "")
+    if not token:
+        raise ValueError("TIINGO_TOKEN 환경변수 미설정")
+    url = f"https://api.tiingo.com/tiingo/daily/{ticker}/prices"
+    params = {
+        "startDate": start.strftime("%Y-%m-%d"),
+        "endDate": end.strftime("%Y-%m-%d"),
+        "token": token,
+    }
+    resp = httpx.get(url, params=params, timeout=20)
+    if resp.status_code != 200:
+        raise ValueError(f"데이터 없음: {ticker} (HTTP {resp.status_code})")
+    data = resp.json()
+    if not data:
+        raise ValueError(f"데이터 없음: {ticker}")
+    df = pd.DataFrame(data)
+    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+    df = df.set_index("date").sort_index()
+    df = df.rename(columns={"adjOpen": "Open", "adjHigh": "High", "adjLow": "Low", "adjClose": "Close"})
+    return df[["Open", "High", "Low", "Close"]].dropna()
 
 
 def fetch_ohlc(ticker: str, period_days: int = 320) -> pd.DataFrame:
     end = datetime.today()
     start = end - timedelta(days=period_days)
-    t = yf.Ticker(ticker)
-    df = t.history(start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"), auto_adjust=True)
-    if df.empty:
-        # fallback: period 방식
-        df = t.history(period="2y", auto_adjust=True)
-    if df.empty:
-        raise ValueError(f"데이터 없음: {ticker}")
-    df = df[["Open", "High", "Low", "Close"]].dropna()
-    return df
+    return _fetch_tiingo(ticker, start, end)
 
 
 def fetch_close(ticker: str, period_days: int = 320) -> pd.Series:
-    df = fetch_ohlc(ticker, period_days)
-    return df["Close"]
+    return fetch_ohlc(ticker, period_days)["Close"]
 
 
 def fetch_high(ticker: str, period_days: int = 320) -> pd.Series:
-    df = fetch_ohlc(ticker, period_days)
-    return df["High"]
+    return fetch_ohlc(ticker, period_days)["High"]
 
 
 def fetch_low(ticker: str, period_days: int = 320) -> pd.Series:
-    df = fetch_ohlc(ticker, period_days)
-    return df["Low"]
+    return fetch_ohlc(ticker, period_days)["Low"]

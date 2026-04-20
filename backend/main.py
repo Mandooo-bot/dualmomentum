@@ -59,22 +59,10 @@ def health():
 @app.get("/api/debug/ticker/{ticker}")
 def debug_ticker(ticker: str):
     import traceback
-    from datetime import datetime, timedelta
     try:
-        import yfinance as yf
-        t = yf.Ticker(ticker)
-        end = datetime.today()
-        start = end - timedelta(days=30)
-        df_date = t.history(start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"), auto_adjust=True)
-        df_period = t.history(period="1mo", auto_adjust=True)
-        df_2y = t.history(period="2y", auto_adjust=True)
-        return {
-            "ticker": ticker,
-            "date_range_rows": len(df_date),
-            "period_1mo_rows": len(df_period),
-            "period_2y_rows": len(df_2y),
-            "today": end.strftime("%Y-%m-%d"),
-        }
+        from services.yfinance_client import fetch_ohlc
+        df = fetch_ohlc(ticker, period_days=30)
+        return {"ticker": ticker, "rows": len(df), "latest_close": float(df["Close"].iloc[-1])}
     except Exception as e:
         return {"ticker": ticker, "error": str(e), "trace": traceback.format_exc()}
 
