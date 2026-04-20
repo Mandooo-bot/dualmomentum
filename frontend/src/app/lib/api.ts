@@ -25,7 +25,7 @@ export async function sendSellNotification(signals: object[]): Promise<void> {
   });
 }
 
-export async function loadPortfolio(): Promise<{ assets: object[]; currency: string } | null> {
+export async function loadPortfolio(): Promise<{ assets: object[]; currency: string; signal_history: object[] } | null> {
   try {
     const res = await fetch(`${API_BASE}/api/portfolio`);
     if (!res.ok) return null;
@@ -35,10 +35,10 @@ export async function loadPortfolio(): Promise<{ assets: object[]; currency: str
   }
 }
 
-export async function savePortfolio(assets: object[], currency: string): Promise<void> {
+export async function savePortfolio(assets: object[], currency: string, signal_history: object[] = []): Promise<void> {
   await fetch(`${API_BASE}/api/portfolio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ assets, currency }),
+    body: JSON.stringify({ assets, currency, signal_history }),
   }).catch(() => {});
 }

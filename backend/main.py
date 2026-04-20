@@ -70,6 +70,7 @@ def debug_ticker(ticker: str):
 class PortfolioSaveRequest(BaseModel):
     assets: List[dict]
     currency: str
+    signal_history: List[dict] = []
 
 
 @app.get("/api/portfolio")
@@ -77,10 +78,10 @@ def portfolio_load():
     sb = get_supabase()
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase 미설정")
-    res = sb.table("portfolios").select("assets, currency").eq("user_id", USER_ID).single().execute()
+    res = sb.table("portfolios").select("assets, currency, signal_history").eq("user_id", USER_ID).single().execute()
     if res.data:
         return res.data
-    return {"assets": [], "currency": "KRW"}
+    return {"assets": [], "currency": "KRW", "signal_history": []}
 
 
 @app.post("/api/portfolio")
@@ -89,7 +90,7 @@ def portfolio_save(req: PortfolioSaveRequest):
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase 미설정")
     sb.table("portfolios").upsert(
-        {"user_id": USER_ID, "assets": req.assets, "currency": req.currency},
+        {"user_id": USER_ID, "assets": req.assets, "currency": req.currency, "signal_history": req.signal_history},
         on_conflict="user_id"
     ).execute()
     return {"ok": True}

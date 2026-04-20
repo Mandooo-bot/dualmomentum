@@ -172,6 +172,7 @@ export default function Dashboard() {
       if (data) {
         if (Array.isArray(data.assets) && data.assets.length > 0) setAssets(data.assets as AssetConfig[]);
         if (data.currency === "KRW" || data.currency === "USD") setCurrency(data.currency);
+        if (Array.isArray(data.signal_history) && data.signal_history.length > 0) setSignalHistory(data.signal_history as HistoryEntry[]);
       }
       supabaseLoaded.current = true;
     });
@@ -181,9 +182,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ assets, currency }));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(signalHistory));
     if (!supabaseLoaded.current) return;
-    savePortfolio(assets, currency);
-  }, [assets, currency, hydrated]);
+    savePortfolio(assets, currency, signalHistory);
+  }, [assets, currency, hydrated, signalHistory]);
 
   /* ── 포트폴리오 입력 핸들러 ── */
   function updateAsset(idx: number, field: keyof AssetConfig, value: string) {
@@ -235,11 +237,7 @@ export default function Dashboard() {
           return_252d: a.return_252d, excess_return: a.excess_return,
         })),
       };
-      setSignalHistory(prev => {
-        const updated = [newEntry, ...prev].slice(0, MAX_HISTORY);
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-        return updated;
-      });
+      setSignalHistory(prev => [newEntry, ...prev].slice(0, MAX_HISTORY));
 
     } catch (e) {
       setError(e instanceof Error ? e.message : "알 수 없는 오류");
@@ -342,15 +340,9 @@ export default function Dashboard() {
                           </div>
                         </button>
                         <button onClick={() => {
-                          setSignalHistory(prev => {
-                            const updated = prev.filter((_, i) => i !== ei);
-                            localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-                            return updated;
-                          });
+                          setSignalHistory(prev => prev.filter((_, i) => i !== ei));
                           if (expandedHistory === ei) setExpandedHistory(null);
-                        }} style={{ background: "none", border: "none", color: "var(--muted)", padding: "12px 14px", cursor: "pointer", fontSize: 16, lineHeight: 1 }} title="삭제">
-                          ×
-                        </button>
+                        }} style={{ background: "none", border: "none", color: "var(--muted)", padding: "12px 14px", cursor: "pointer", fontSize: 16, lineHeight: 1 }} title="삭제">×</button>
                       </div>
                       {isOpen && (
                         <table style={{ width: "100%", borderCollapse: "collapse" }}>
