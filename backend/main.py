@@ -56,6 +56,18 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/debug/ticker/{ticker}")
+def debug_ticker(ticker: str):
+    import traceback
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        df = t.history(period="5d", auto_adjust=True)
+        return {"ticker": ticker, "rows": len(df), "empty": df.empty, "columns": list(df.columns)}
+    except Exception as e:
+        return {"ticker": ticker, "error": str(e), "trace": traceback.format_exc()}
+
+
 class PortfolioSaveRequest(BaseModel):
     assets: List[dict]
     currency: str
