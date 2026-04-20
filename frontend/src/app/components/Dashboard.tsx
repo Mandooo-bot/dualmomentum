@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { analyzePortfolio, sendSellNotification } from "@/app/lib/api";
+import { supabase, USER_ID } from "@/app/lib/supabase";
 import type {
   AssetConfig,
   AssetResult,
@@ -152,7 +153,9 @@ export default function Dashboard() {
   const [signalHistory, setSignalHistory] = useState<HistoryEntry[]>([]);
   const [expandedHistory, setExpandedHistory] = useState<number | null>(0);
 
-  /* ── localStorage 불러오기 (최초 마운트) ── */
+  const supabaseLoaded = useRef(false);
+
+  /* ── 불러오기: localStorage(즉시) → Supabase(비동기 덮어쓰기) ── */
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -165,12 +168,30 @@ export default function Dashboard() {
       if (hist) setSignalHistory(JSON.parse(hist));
     } catch {}
     setHydrated(true);
+
+    supabase
+      .from("portfolios")
+      .select("assets, currency")
+      .eq("user_id", USER_ID)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          if (Array.isArray(data.assets) && data.assets.length > 0) setAssets(data.assets);
+          if (data.currency === "KRW" || data.currency === "USD") setCurrency(data.currency);
+        }
+        supabaseLoaded.current = true;
+      });
   }, []);
 
-  /* ── localStorage 자동 저장 (변경 시마다) ── */
+  /* ── 저장: localStorage(즉시) + Supabase(비동기) ── */
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ assets, currency }));
+    if (!supabaseLoaded.current) return;
+    supabase.from("portfolios").upsert(
+      { user_id: USER_ID, assets, currency, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
   }, [assets, currency, hydrated]);
 
   /* ── 포트폴리오 입력 핸들러 ── */
