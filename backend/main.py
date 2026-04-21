@@ -78,9 +78,9 @@ def portfolio_load():
     sb = get_supabase()
     if not sb:
         raise HTTPException(status_code=503, detail="Supabase 미설정")
-    res = sb.table("portfolios").select("assets, currency, signal_history").eq("user_id", USER_ID).single().execute()
-    if res.data:
-        return res.data
+    res = sb.table("portfolios").select("assets, currency, signal_history").eq("user_id", USER_ID).limit(1).execute()
+    if res.data and len(res.data) > 0:
+        return res.data[0]
     return {"assets": [], "currency": "KRW", "signal_history": []}
 
 
