@@ -15,10 +15,10 @@ def _fetch_tiingo(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
         "endDate": end.strftime("%Y-%m-%d"),
         "token": token,
     }
-    for attempt in range(4):
+    for attempt in range(6):
         resp = httpx.get(url, params=params, timeout=20)
         if resp.status_code == 429:
-            time.sleep(3 * (2 ** attempt))  # 3s → 6s → 12s → 24s
+            time.sleep(2 ** (attempt + 1))  # 2s → 4s → 8s → 16s → 32s → 64s
             continue
         break
     if resp.status_code != 200:

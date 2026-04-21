@@ -61,7 +61,6 @@ def analyze_portfolio(tickers: List[str]) -> Dict[str, Any]:
     # BIL 데이터 먼저 수집
     bil_df = fetch_ohlc(BIL_TICKER, period_days=430)
     bil_ret = return_252d(bil_df["Close"])
-    time.sleep(2)
 
     results = []
     errors = []
@@ -73,7 +72,7 @@ def analyze_portfolio(tickers: List[str]) -> Dict[str, Any]:
             results.append(_analyze_ticker(t, bil_ret))
         except Exception as e:
             errors.append({"ticker": t, "error": str(e)})
-        time.sleep(2)
+        time.sleep(1.0)
 
     # 상대모멘텀: 252일 수익률 내림차순 순위
     results.sort(key=lambda x: x["return_252d"], reverse=True)
