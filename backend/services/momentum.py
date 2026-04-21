@@ -1,3 +1,4 @@
+import time
 from services.yfinance_client import fetch_ohlc
 from services.indicators import ma200, donchian_upper, donchian_lower, return_252d
 from typing import List, Dict, Any
@@ -71,6 +72,7 @@ def analyze_portfolio(tickers: List[str]) -> Dict[str, Any]:
             results.append(_analyze_ticker(t, bil_ret))
         except Exception as e:
             errors.append({"ticker": t, "error": str(e)})
+        time.sleep(0.5)
 
     # 상대모멘텀: 252일 수익률 내림차순 순위
     results.sort(key=lambda x: x["return_252d"], reverse=True)

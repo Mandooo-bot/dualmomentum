@@ -1,4 +1,5 @@
 import os
+import time
 import httpx
 import pandas as pd
 from datetime import datetime, timedelta
@@ -14,7 +15,12 @@ def _fetch_tiingo(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
         "endDate": end.strftime("%Y-%m-%d"),
         "token": token,
     }
-    resp = httpx.get(url, params=params, timeout=20)
+    for attempt in range(4):
+        resp = httpx.get(url, params=params, timeout=20)
+        if resp.status_code == 429:
+            time.sleep(2 ** attempt)  # 1s → 2s → 4s → 8s
+            continue
+        break
     if resp.status_code != 200:
         raise ValueError(f"데이터 없음: {ticker} (HTTP {resp.status_code})")
     data = resp.json()
