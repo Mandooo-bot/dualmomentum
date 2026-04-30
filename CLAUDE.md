@@ -28,6 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 분석 결과 이메일 발송 | ✅ 완료 | "결과를 이메일로 받기" 버튼, /api/notify/report, Resend API 사용 |
 | Vercel 배포 (프론트엔드) | ✅ 완료 | GitHub 연동 자동 배포 |
 | Railway 배포 (백엔드) | ✅ 완료 | FastAPI, dualmomentum-production.up.railway.app |
+| 포트폴리오 시그널 Yahoo Finance 차트 링크 | ✅ 완료 | 각 종목 행 끝 "차트 ↗" 버튼 → https://finance.yahoo.com/chart/{TICKER} 새 탭 |
 
 ### 남은 작업
 
@@ -42,6 +43,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **어조**: 친근하고 정확하고 명확하게 (과장 금지)
 - **출처가 없는 통계/수치 사용 금지**
+- **프론트엔드 변경 시 반드시 git commit + push** → Vercel 자동 재배포 (사용자는 https://dualmomentum.vercel.app/ 접속 중, localhost 아님)
+- 외부 링크는 반드시 `<a href="..." target="_blank" rel="noopener noreferrer">` 사용 (`window.open()` 은 팝업 차단에 걸림)
 
 ## 절대 하지 말 것
 
