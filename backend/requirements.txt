@@ -4,5 +4,4 @@ pandas==2.2.2
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9
 resend==2.4.0
-yfinance==0.2.51
-curl_cffi==0.7.4
+pandas-datareader==0.10.0
