@@ -40,18 +40,25 @@ def _fetch_tiingo(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
 
 
 def _fetch_yfinance(ticker: str, start: datetime, end: datetime) -> pd.DataFrame:
-    df = yf.download(
-        ticker,
+    import requests
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
+    })
+    t = yf.Ticker(ticker, session=session)
+    df = t.history(
         start=start.strftime("%Y-%m-%d"),
         end=(end + timedelta(days=1)).strftime("%Y-%m-%d"),
         auto_adjust=True,
-        progress=False,
     )
     if df.empty:
         raise ValueError(f"데이터 없음: {ticker} (yfinance)")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
     df.index = pd.to_datetime(df.index).tz_localize(None)
+    df = df.rename(columns={"Open": "Open", "High": "High", "Low": "Low", "Close": "Close"})
     return df[["Open", "High", "Low", "Close"]].dropna()
 
 
