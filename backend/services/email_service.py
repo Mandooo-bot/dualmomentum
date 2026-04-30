@@ -1,21 +1,28 @@
-import smtplib
+import resend
 import os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
-GMAIL_USER = os.getenv("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 NOTIFY_TO = "aksen159@gmail.com"
+FROM_EMAIL = "dualmmt@resend.dev"
+
+
+def _send(subject: str, html: str) -> None:
+    if not RESEND_API_KEY:
+        raise ValueError("RESEND_API_KEY 환경변수가 설정되지 않았습니다.")
+    resend.api_key = RESEND_API_KEY
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": NOTIFY_TO,
+        "subject": subject,
+        "html": html,
+    })
 
 
 def send_analysis_report_email(bil_return: float, market_pass: bool, assets: list[dict]) -> None:
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        raise ValueError("GMAIL_USER 또는 GMAIL_APP_PASSWORD 환경변수가 설정되지 않았습니다.")
-
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     market_color = "#22c55e" if market_pass else "#ef4444"
     market_label = "통과 — 투자 유효 구간" if market_pass else "미통과 — BIL 대피"
@@ -68,21 +75,10 @@ def send_analysis_report_email(bil_return: float, market_pass: bool, assets: lis
       </p>
     </div>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[듀얼모멘텀] 분석 리포트 — {now}"
-    msg["From"] = GMAIL_USER
-    msg["To"] = NOTIFY_TO
-    msg.attach(MIMEText(html, "html"))
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        smtp.send_message(msg)
+    _send(f"[듀얼모멘텀] 분석 리포트 — {now}", html)
 
 
 def send_sell_signal_email(signals: list[dict]) -> None:
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        raise ValueError("GMAIL_USER 또는 GMAIL_APP_PASSWORD 환경변수가 설정되지 않았습니다.")
-
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     rows = ""
@@ -120,12 +116,4 @@ def send_sell_signal_email(signals: list[dict]) -> None:
       </p>
     </div>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[듀얼모멘텀] 매도 시그널 {len(signals)}건 발생 — {now}"
-    msg["From"] = GMAIL_USER
-    msg["To"] = NOTIFY_TO
-    msg.attach(MIMEText(html, "html"))
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        smtp.send_message(msg)
+    _send(f"[듀얼모멘텀] 매도 시그널 {len(signals)}건 발생 — {now}", html)
