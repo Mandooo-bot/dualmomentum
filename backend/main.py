@@ -1,25 +1,19 @@
 import os
+import json
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 from services.momentum import analyze_portfolio
-from services.email_service import send_sell_signal_email
-from supabase import create_client
+from services.email_service import send_sell_signal_email, send_analysis_report_email
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+USER_ID = "aksen159"
 
 app = FastAPI(title="Dual Momentum Dashboard API")
-
-_sb = None
-def get_supabase():
-    global _sb
-    if _sb is None:
-        url = os.getenv("SUPABASE_URL", "")
-        key = os.getenv("SUPABASE_KEY", "")
-        if url and key:
-            _sb = create_client(url, key)
-    return _sb
-
-USER_ID = "aksen159"
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,12 +24,100 @@ app.add_middleware(
 )
 
 
+@contextmanager
+def get_db():
+    if not DATABASE_URL:
+        raise HTTPException(status_code=503, detail="DATABASE_URL 미설정")
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.on_event("startup")
+def init_db():
+    if not DATABASE_URL:
+        return
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS portfolios (
+                    user_id TEXT PRIMARY KEY,
+                    assets JSONB,
+                    currency TEXT,
+                    signal_history JSONB
+                )
+            """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
 class PortfolioRequest(BaseModel):
     tickers: List[str]
 
 
 class NotifyRequest(BaseModel):
     signals: List[dict]
+
+
+class ReportRequest(BaseModel):
+    bil_return: float
+    market_pass: bool
+    assets: List[dict]
+
+
+class PortfolioSaveRequest(BaseModel):
+    assets: List[dict]
+    currency: str
+    signal_history: List[dict] = []
+
+
+@app.get("/api/portfolio")
+def portfolio_load():
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT assets, currency, signal_history FROM portfolios WHERE user_id = %s",
+                (USER_ID,)
+            )
+            row = cur.fetchone()
+    if row:
+        return {
+            "assets": row["assets"] or [],
+            "currency": row["currency"] or "KRW",
+            "signal_history": row["signal_history"] or [],
+        }
+    return {"assets": [], "currency": "KRW", "signal_history": []}
+
+
+@app.post("/api/portfolio")
+def portfolio_save(req: PortfolioSaveRequest):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO portfolios (user_id, assets, currency, signal_history)
+                VALUES (%s, %s::jsonb, %s, %s::jsonb)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    assets = EXCLUDED.assets,
+                    currency = EXCLUDED.currency,
+                    signal_history = EXCLUDED.signal_history
+            """, (USER_ID, json.dumps(req.assets), req.currency, json.dumps(req.signal_history)))
+    return {"ok": True}
+
+
+@app.post("/api/notify/report")
+def notify_report(req: ReportRequest):
+    try:
+        send_analysis_report_email(req.bil_return, req.market_pass, req.assets)
+        return {"sent": True}
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"메일 발송 실패: {str(e)}")
 
 
 @app.post("/api/notify")
@@ -65,35 +147,6 @@ def debug_ticker(ticker: str):
         return {"ticker": ticker, "rows": len(df), "latest_close": float(df["Close"].iloc[-1])}
     except Exception as e:
         return {"ticker": ticker, "error": str(e), "trace": traceback.format_exc()}
-
-
-class PortfolioSaveRequest(BaseModel):
-    assets: List[dict]
-    currency: str
-    signal_history: List[dict] = []
-
-
-@app.get("/api/portfolio")
-def portfolio_load():
-    sb = get_supabase()
-    if not sb:
-        raise HTTPException(status_code=503, detail="Supabase 미설정")
-    res = sb.table("portfolios").select("assets, currency, signal_history").eq("user_id", USER_ID).limit(1).execute()
-    if res.data and len(res.data) > 0:
-        return res.data[0]
-    return {"assets": [], "currency": "KRW", "signal_history": []}
-
-
-@app.post("/api/portfolio")
-def portfolio_save(req: PortfolioSaveRequest):
-    sb = get_supabase()
-    if not sb:
-        raise HTTPException(status_code=503, detail="Supabase 미설정")
-    sb.table("portfolios").upsert(
-        {"user_id": USER_ID, "assets": req.assets, "currency": req.currency, "signal_history": req.signal_history},
-        on_conflict="user_id"
-    ).execute()
-    return {"ok": True}
 
 
 @app.post("/api/analyze")

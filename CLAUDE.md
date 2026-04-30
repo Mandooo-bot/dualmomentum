@@ -27,17 +27,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Python venv 환경 | ✅ 완료 | backend/.venv (python3.12) |
 | 백엔드 패키지 설치 | ✅ 완료 | fastapi, uvicorn, yfinance 등 |
 
-### 남은 작업 (다음 단계)
+### 완료된 추가 작업
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| Supabase → Neon 마이그레이션 | ✅ 완료 | psycopg2-binary, DATABASE_URL 환경변수 |
+| 분석 결과 이메일 발송 | ✅ 완료 | "결과를 이메일로 받기" 버튼, /api/notify/report |
+| Vercel 배포 (프론트엔드) | ✅ 완료 | GitHub 연동 자동 배포 |
+| Railway 배포 (백엔드) | ✅ 완료 | FastAPI, railway.app |
+
+### 남은 작업
 
 | 항목 | 우선순위 | 비고 |
 |------|----------|------|
-| 백엔드 서버 실행 확인 | 🔴 높음 | `backend/.venv/bin/uvicorn main:app --reload` |
-| 프론트↔백엔드 API 연동 테스트 | 🔴 높음 | "분석 실행" 버튼 → 실제 데이터 수신 확인 |
-| Supabase 설정 | 🟡 중간 | DB 테이블 생성, 포트폴리오 저장 기능 |
 | 카카오 OAuth 2.0 구현 | 🟡 중간 | 개발자 콘솔 앱 등록 → 로그인 플로우 |
-| .env 환경변수 설정 | 🟡 중간 | KAKAO_CLIENT_ID, SUPABASE_URL 등 |
-| Vercel 배포 (프론트엔드) | 🟢 낮음 | GitHub 연동 후 자동 배포 |
-| Railway 배포 (백엔드) | 🟢 낮음 | FastAPI 컨테이너 배포 |
 | 시그널 변화 알림 기능 | 🟢 낮음 | 카카오 메시지 API 활용 |
 
 ### 현재 실행 상태
@@ -65,8 +68,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 프론트엔드 | Next.js (React) |
 | 백엔드 | Python FastAPI |
 | 데이터 수집 | yfinance |
-| 데이터베이스 | Supabase (PostgreSQL) |
-| 인증 | 카카오 OAuth 2.0 |
+| 데이터베이스 | Neon (PostgreSQL, psycopg2 직접 연결) |
+| 인증 | 카카오 OAuth 2.0 (미구현) |
 | 배포 | Vercel (프론트) + Railway (백엔드) |
 
 ## 개발 명령어

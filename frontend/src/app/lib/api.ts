@@ -17,6 +17,22 @@ export async function analyzePortfolio(
   return res.json();
 }
 
+export async function sendAnalysisReport(
+  bil_return: number,
+  market_pass: boolean,
+  assets: object[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/notify/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bil_return, market_pass, assets }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? `메일 발송 실패 (${res.status})`);
+  }
+}
+
 export async function sendSellNotification(signals: object[]): Promise<void> {
   await fetch(`${API_BASE}/api/notify`, {
     method: "POST",

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { analyzePortfolio, sendSellNotification, loadPortfolio, savePortfolio } from "@/app/lib/api";
+import { analyzePortfolio, sendSellNotification, sendAnalysisReport, loadPortfolio, savePortfolio } from "@/app/lib/api";
 import type {
   AssetConfig,
   AssetResult,
@@ -151,6 +151,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"대시보드" | "시그널 이력" | "설정">("대시보드");
   const [signalHistory, setSignalHistory] = useState<HistoryEntry[]>([]);
   const [expandedHistory, setExpandedHistory] = useState<number | null>(0);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const supabaseLoaded = useRef(false);
 
@@ -207,11 +209,29 @@ export default function Dashboard() {
     setAddCategory("알파 후보");
   }
 
+  /* ── 분석 결과 이메일 발송 ── */
+  async function sendReport() {
+    if (!result) return;
+    setEmailSending(true);
+    setEmailSent(false);
+    const vooAsset = result.assets.find(a => a.ticker === "VOO");
+    const market_pass = vooAsset ? (vooAsset.return_252d - result.bil_return_252d) >= 0 : false;
+    try {
+      await sendAnalysisReport(result.bil_return_252d, market_pass, result.assets);
+      setEmailSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "메일 발송 실패");
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
   /* ── 분석 실행 ── */
   async function runAnalysis() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setEmailSent(false);
     try {
       const tickers = assets.map(a => a.ticker);
       const data = await analyzePortfolio(tickers);
@@ -534,6 +554,13 @@ export default function Dashboard() {
           style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 28px", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", width: "100%", marginTop: 14, opacity: loading ? 0.7 : 1 }}>
           {loading ? "분석 중..." : "분석 실행"}
         </button>
+
+        {result && (
+          <button onClick={sendReport} disabled={emailSending}
+            style={{ background: "none", border: "1px solid var(--border)", color: emailSent ? "var(--buy)" : "var(--text)", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: emailSending ? "not-allowed" : "pointer", width: "100%", marginTop: 8, opacity: emailSending ? 0.6 : 1 }}>
+            {emailSending ? "발송 중..." : emailSent ? "✓ 이메일 발송 완료" : "결과를 이메일로 받기"}
+          </button>
+        )}
 
         {error && (
           <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "var(--radius)", padding: "12px 18px", marginTop: 14, color: "var(--sell)", fontSize: 13 }}>
