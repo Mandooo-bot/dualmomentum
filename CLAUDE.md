@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 현재 진행 상황 (2026-04-17 기준)
+## 현재 진행 상황 (2026-04-30 기준)
 
 ### 완료된 작업
 
@@ -18,23 +18,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|------|------|
 | 전략 문서화 (CLAUDE.md) | ✅ 완료 | 상대/절대모멘텀 로직 전체 기록 |
 | UI 목업 (draft.html) | ✅ 완료 | 다크테마 정적 HTML, 참고용 |
-| Next.js 16 프론트엔드 설정 | ✅ 완료 | TypeScript + Tailwind, http://localhost:3000 |
+| Next.js 프론트엔드 설정 | ✅ 완료 | TypeScript + Tailwind |
 | 대시보드 UI 구현 | ✅ 완료 | Dashboard.tsx — 전략 소개, 포트폴리오 입력, 분석 결과 표시 |
-| FastAPI 백엔드 구조 | ✅ 완료 | main.py, services/, models/ |
-| yfinance 데이터 수집 | ✅ 완료 | services/yfinance_client.py |
+| FastAPI 백엔드 구조 | ✅ 완료 | main.py, services/ |
+| 데이터 수집 | ✅ 완료 | services/yfinance_client.py — Tiingo 우선, 429 시 Yahoo Finance v8 API 폴백 |
 | 지표 계산 로직 | ✅ 완료 | MA200, Donchian 55D/20D, 252거래일 수익률 |
 | 듀얼모멘텀 시그널 계산 | ✅ 완료 | services/momentum.py — BIL 비교 + 기술적 필터 |
-| Python venv 환경 | ✅ 완료 | backend/.venv (python3.12) |
-| 백엔드 패키지 설치 | ✅ 완료 | fastapi, uvicorn, yfinance 등 |
-
-### 완료된 추가 작업
-
-| 항목 | 상태 | 비고 |
-|------|------|------|
 | Supabase → Neon 마이그레이션 | ✅ 완료 | psycopg2-binary, DATABASE_URL 환경변수 |
-| 분석 결과 이메일 발송 | ✅ 완료 | "결과를 이메일로 받기" 버튼, /api/notify/report |
+| 분석 결과 이메일 발송 | ✅ 완료 | "결과를 이메일로 받기" 버튼, /api/notify/report, Resend API 사용 |
 | Vercel 배포 (프론트엔드) | ✅ 완료 | GitHub 연동 자동 배포 |
-| Railway 배포 (백엔드) | ✅ 완료 | FastAPI, railway.app |
+| Railway 배포 (백엔드) | ✅ 완료 | FastAPI, dualmomentum-production.up.railway.app |
 
 ### 남은 작업
 
@@ -42,10 +35,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|----------|------|
 | 카카오 OAuth 2.0 구현 | 🟡 중간 | 개발자 콘솔 앱 등록 → 로그인 플로우 |
 | 시그널 변화 알림 기능 | 🟢 낮음 | 카카오 메시지 API 활용 |
-
-### 현재 실행 상태
-- **프론트엔드**: http://localhost:3000 실행 중 (`npm run dev`)
-- **백엔드**: 설치 완료, 아직 미실행 → `cd backend && .venv/bin/uvicorn main:app --reload`
 
 ---
 
@@ -67,8 +56,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|------|
 | 프론트엔드 | Next.js (React) |
 | 백엔드 | Python FastAPI |
-| 데이터 수집 | yfinance |
-| 데이터베이스 | Neon (PostgreSQL, psycopg2 직접 연결) |
+| 데이터 수집 | Tiingo API (primary) → Yahoo Finance v8 API (fallback, 429 시 자동 전환) |
+| 이메일 발송 | Resend API (HTTP 기반, Railway SMTP 차단 우회) |
+| 데이터베이스 | Neon (PostgreSQL, psycopg2 직접 연결, 자동 절전/자동 재개) |
 | 인증 | 카카오 OAuth 2.0 (미구현) |
 | 배포 | Vercel (프론트) + Railway (백엔드) |
 
@@ -87,12 +77,27 @@ cd backend
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn main:app --reload  # http://localhost:8000
-
-# 환경변수 (루트에 .env.local)
-KAKAO_CLIENT_ID=...
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
 ```
+
+## Railway 환경변수 (필수)
+
+| 변수명 | 설명 |
+|--------|------|
+| `DATABASE_URL` | Neon PostgreSQL 연결 문자열 (`postgresql://...@...neon.tech/neondb?sslmode=require`) |
+| `TIINGO_TOKEN` | Tiingo API 토큰 (데이터 수집 primary) |
+| `RESEND_API_KEY` | Resend 이메일 API 키 (`re_...`) |
+
+## Vercel 환경변수 (필수)
+
+| 변수명 | 설명 |
+|--------|------|
+| `NEXT_PUBLIC_API_URL` | Railway 백엔드 URL (`https://dualmomentum-production.up.railway.app`) |
+
+## 데이터 수집 구조
+
+- **primary**: Tiingo API (`TIINGO_TOKEN` 필요, 무료 1000 req/day, 2GB/월)
+- **fallback**: Yahoo Finance v8 JSON API (헤더 우회, Tiingo 429 초과 시 자동 전환)
+- Tiingo 월간 한도: 매월 1일 자정 리셋
 
 ## 아키텍처 구조
 
@@ -117,10 +122,10 @@ my-project/
 
 ## 핵심 데이터 흐름
 
-1. 티커 입력 → `yfinance`로 OHLC 300거래일치 수집
+1. 티커 입력 → Tiingo API(primary) / Yahoo Finance v8(fallback)로 OHLC 430거래일치 수집
 2. 서버에서 직접 계산: 252거래일 수익률, BIL 초과수익, MA200, Donchian 55D 상단/20D 하단
 3. 절대모멘텀(BIL 비교) → 상대모멘텀(순위) → 기술적 필터(MA200·Donchian) 순으로 판정
-4. 결과를 Supabase에 저장, 프론트엔드로 반환
+4. 결과를 Neon(PostgreSQL)에 저장, 프론트엔드로 반환
 
 ## 시그널 판정 로직
 
