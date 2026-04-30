@@ -142,10 +142,10 @@ elif price > ma200 and price >= donchian_55d_high:
     signal = "매수"
 elif price > ma200 and price >= donchian_20d_low:
     signal = "유지"
-elif price < donchian_20d_low:
-    signal = "1차매도"
 elif price < ma200:
     signal = "전체매도"
+elif price < donchian_20d_low:
+    signal = "1차매도"
 ```
 
 ---

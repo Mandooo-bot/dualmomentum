@@ -24,10 +24,10 @@ def _signal(
         return "매수"
     elif price > sma200 and price >= dc20_low:
         return "유지"
-    elif price < dc20_low:
-        return "1차매도"
     elif price < sma200:
         return "전체매도"
+    elif price < dc20_low:
+        return "1차매도"
 
     return "유지"
 
