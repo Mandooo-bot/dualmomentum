@@ -627,10 +627,10 @@ export default function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["순위", "섹터", "티커", "종목명", "252거래일 수익률", "절대모멘텀", "SMA200", "Donchian", "현재/목표 비중", "투자시그널"].map((h, i) => (
+                    {["순위", "섹터", "티커", "종목명", "252거래일 수익률", "절대모멘텀", "SMA200", "Donchian", "현재/목표 비중", "투자시그널", "차트"].map((h, i) => (
                       <th key={i} style={{
                         padding: "9px 12px", fontSize: 11, color: "var(--muted)", fontWeight: 600,
-                        textAlign: i === 0 || (i >= 5 && i <= 8) ? "center" : i === 4 ? "right" : "left",
+                        textAlign: i === 0 || (i >= 5 && i <= 9) ? "center" : i === 4 ? "right" : "left",
                         borderBottom: "1px solid var(--border)", whiteSpace: "nowrap",
                       }}>{h}</th>
                     ))}
@@ -648,7 +648,7 @@ export default function Dashboard() {
                     return (
                       <React.Fragment key={cat}>
                         <tr style={{ background: `rgba(${cat === "인덱스 코어" ? "79,142,247" : cat === "시스템/인프라섹터" ? "167,139,250" : cat === "모멘텀/고베타" ? "245,158,11" : "52,211,153"},0.04)` }}>
-                          <td colSpan={10} style={{ padding: "7px 14px", fontSize: "0.75em", color: "var(--muted)", letterSpacing: "0.5px", textAlign: "center" }}>
+                          <td colSpan={11} style={{ padding: "7px 14px", fontSize: "0.75em", color: "var(--muted)", letterSpacing: "0.5px", textAlign: "center" }}>
                             ── {cat} ──
                           </td>
                         </tr>
@@ -682,6 +682,16 @@ export default function Dashboard() {
                                 {ar.signal}
                               </span>
                             </td>
+                            <td style={{ padding: "11px 12px", textAlign: "center" }}>
+                              <a
+                                href={`https://finance.yahoo.com/chart/${ar.ticker}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: "var(--accent)", textDecoration: "none", whiteSpace: "nowrap" }}
+                              >
+                                차트 ↗
+                              </a>
+                            </td>
                           </tr>
                         ))}
                       </React.Fragment>
@@ -699,7 +709,7 @@ export default function Dashboard() {
                     <td style={{ padding: "11px 12px", textAlign: "center" }}>
                       <span className="pill pill-na" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>기준</span>
                     </td>
-                    <td colSpan={4} style={{ padding: "11px 12px", textAlign: "center", color: "var(--muted)" }}>—</td>
+                    <td colSpan={5} style={{ padding: "11px 12px", textAlign: "center", color: "var(--muted)" }}>—</td>
                   </tr>
                 </tbody>
               </table>
