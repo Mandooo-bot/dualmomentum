@@ -1,19 +1,28 @@
 import os
 import json
+import logging
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from services.momentum import analyze_portfolio
 from services.email_service import send_sell_signal_email, send_analysis_report_email
+from services.scheduler import run_weekly_report
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 USER_ID = "aksen159"
+SCHEDULER_SECRET = os.getenv("SCHEDULER_SECRET", "")
 
 app = FastAPI(title="Dual Momentum Dashboard API")
+scheduler = BackgroundScheduler(timezone="Asia/Seoul")
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,6 +63,22 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
+
+    # 매주 월요일 09:00 KST 자동 분석 스케줄 등록
+    scheduler.add_job(
+        run_weekly_report,
+        CronTrigger(day_of_week="mon", hour=9, minute=0),
+        id="weekly_report",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info("[scheduler] 주간 리포트 스케줄 등록 완료 (매주 월요일 09:00 KST)")
+
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
 
 
 class PortfolioRequest(BaseModel):
@@ -131,6 +156,17 @@ def notify(req: NotifyRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"메일 발송 실패: {str(e)}")
+
+
+@app.post("/api/weekly-report")
+def trigger_weekly_report(x_scheduler_secret: Optional[str] = Header(default=None)):
+    if SCHEDULER_SECRET and x_scheduler_secret != SCHEDULER_SECRET:
+        raise HTTPException(status_code=401, detail="인증 실패")
+    try:
+        result = run_weekly_report()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")
