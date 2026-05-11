@@ -22,11 +22,16 @@ def _send(subject: str, html: str) -> None:
     })
 
 
-def send_analysis_report_email(bil_return: float, market_pass: bool, assets: list[dict]) -> None:
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    market_color = "#22c55e" if market_pass else "#ef4444"
-    market_label = "통과 — 투자 유효 구간" if market_pass else "미통과 — BIL 대피"
+_CATEGORY_ORDER = ["인덱스 코어", "시스템/인프라섹터", "모멘텀/고베타", "알파 후보"]
+_CATEGORY_COLOR = {
+    "인덱스 코어":      "#4f8ef7",
+    "시스템/인프라섹터": "#a78bfa",
+    "모멘텀/고베타":    "#f59e0b",
+    "알파 후보":        "#34d399",
+}
 
+
+def _asset_rows(assets: list[dict]) -> str:
     rows = ""
     for a in sorted(assets, key=lambda x: x.get("return_252d", 0), reverse=True):
         sig = a.get("signal", "—")
@@ -43,6 +48,33 @@ def send_analysis_report_email(bil_return: float, market_pass: bool, assets: lis
           <td style="padding:9px 14px;text-align:center;color:{excess_color};font-weight:600;">{excess_label}</td>
           <td style="padding:9px 14px;text-align:center;color:{sig_color};font-weight:700;">{sig}</td>
         </tr>"""
+    return rows
+
+
+def send_analysis_report_email(bil_return: float, market_pass: bool, assets: list[dict]) -> None:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    market_color = "#22c55e" if market_pass else "#ef4444"
+    market_label = "통과 — 투자 유효 구간" if market_pass else "미통과 — BIL 대피"
+
+    grouped: dict[str, list] = {cat: [] for cat in _CATEGORY_ORDER}
+    for a in assets:
+        cat = a.get("category", "알파 후보")
+        grouped.setdefault(cat, []).append(a)
+
+    sections = ""
+    for cat in _CATEGORY_ORDER:
+        cat_assets = grouped.get(cat, [])
+        if not cat_assets:
+            continue
+        color = _CATEGORY_COLOR.get(cat, "#94a3b8")
+        sections += f"""
+        <tr>
+          <td colspan="4" style="padding:10px 14px 6px;background:#f8fafc;border-top:2px solid {color};">
+            <span style="font-size:11px;font-weight:700;color:{color};text-transform:uppercase;letter-spacing:0.05em;">{cat}</span>
+            <span style="font-size:11px;color:#94a3b8;margin-left:8px;">{len(cat_assets)}종목</span>
+          </td>
+        </tr>"""
+        sections += _asset_rows(cat_assets)
 
     html = f"""
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;background:#f8fafc;padding:24px;">
@@ -67,7 +99,7 @@ def send_analysis_report_email(bil_return: float, market_pass: bool, assets: lis
               <th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;font-weight:600;">시그널</th>
             </tr>
           </thead>
-          <tbody>{rows}</tbody>
+          <tbody>{sections}</tbody>
         </table>
       </div>
       <p style="color:#94a3b8;font-size:11px;margin-top:16px;text-align:center;">

@@ -15,6 +15,20 @@ USER_ID = "aksen159"
 
 KST = timezone(timedelta(hours=9))
 
+_INDEX_CORE = {"VOO","SPY","QQQ","VTI","IVV","ITOT","SCHB","VEA","VWO","ACWI","IXUS","EFA","EEM",
+               "AGG","BND","TLT","IEF","SHY","VGLT","VCIT","GLD","IAU","SLV","BIL"}
+_INFRA      = {"XLU","VPU","XLP","VDC","XLF","VFH","VNQ","XLRE","IYR","XLC","VOX",
+               "XLI","VIS","XLV","VHT","IBB","XBI","XLE","VDE","IYE","XLB","VAW"}
+_MOMENTUM   = {"TQQQ","UPRO","SPXL","SOXL","TECL","LABU","UDOW","SOXX","SMH","MTUM","QMOM",
+               "VUG","MGK","IWF","SCHG","IWM","VBR","SCHA","VIOG","SPMD"}
+
+def _classify_ticker(ticker: str) -> str:
+    t = ticker.upper()
+    if t in _INDEX_CORE: return "인덱스 코어"
+    if t in _INFRA:      return "시스템/인프라섹터"
+    if t in _MOMENTUM:   return "모멘텀/고베타"
+    return "알파 후보"
+
 
 def run_weekly_report() -> dict:
     """DB에 저장된 포트폴리오를 분석하고 이메일로 결과를 발송합니다."""
@@ -47,12 +61,20 @@ def run_weekly_report() -> dict:
         logger.warning("[weekly-report] 유효한 티커 없음 — 종료")
         return {"ok": False, "reason": "유효한 티커 없음"}
 
+    ticker_category = {
+        a["ticker"]: (a.get("category") or _classify_ticker(a["ticker"]))
+        for a in assets_config if a.get("ticker")
+    }
+
     logger.info(f"[weekly-report] 분석 대상 티커: {tickers}")
 
     # 2. 분석 실행
     result = analyze_portfolio(tickers)
     bil_return = result["bil_return_252d"]
     assets = result["assets"]
+
+    for a in assets:
+        a["category"] = ticker_category.get(a["ticker"], _classify_ticker(a["ticker"]))
 
     market_pass = any(a.get("excess_return", -1) >= 0 for a in assets)
 
