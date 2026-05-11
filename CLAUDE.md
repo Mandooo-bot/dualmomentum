@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 현재 진행 상황 (2026-04-30 기준)
+## 현재 진행 상황 (2026-05-11 기준)
 
 ### 완료된 작업
 
@@ -29,6 +29,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Vercel 배포 (프론트엔드) | ✅ 완료 | GitHub 연동 자동 배포 |
 | Railway 배포 (백엔드) | ✅ 완료 | FastAPI, dualmomentum-production.up.railway.app |
 | 포트폴리오 시그널 Yahoo Finance 차트 링크 | ✅ 완료 | 각 종목 행 끝 "차트 ↗" 버튼 → https://finance.yahoo.com/chart/{TICKER} 새 탭 |
+| 매주 월요일 09:00 KST 자동 분석 이메일 스케줄러 | ✅ 완료 | APScheduler, /api/weekly-report (SCHEDULER_SECRET 보호), services/scheduler.py |
+| 이메일 섹터별 그룹화 | ✅ 완료 | 인덱스 코어 → 시스템/인프라섹터 → 모멘텀/고베타 → 알파 후보 순 섹션 구분, 섹터 내 수익률 순 정렬 |
 
 ### 남은 작업
 
