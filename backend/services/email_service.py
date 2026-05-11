@@ -56,13 +56,17 @@ def send_analysis_report_email(bil_return: float, market_pass: bool, assets: lis
     market_color = "#22c55e" if market_pass else "#ef4444"
     market_label = "통과 — 투자 유효 구간" if market_pass else "미통과 — BIL 대피"
 
-    grouped: dict[str, list] = {cat: [] for cat in _CATEGORY_ORDER}
+    grouped: dict[str, list] = {}
     for a in assets:
-        cat = a.get("category", "알파 후보")
+        cat = a.get("category") or "알파 후보"
         grouped.setdefault(cat, []).append(a)
 
+    known = [c for c in _CATEGORY_ORDER if c in grouped]
+    extra = sorted(c for c in grouped if c not in _CATEGORY_ORDER)
+    render_order = known + extra
+
     sections = ""
-    for cat in _CATEGORY_ORDER:
+    for cat in render_order:
         cat_assets = grouped.get(cat, [])
         if not cat_assets:
             continue
