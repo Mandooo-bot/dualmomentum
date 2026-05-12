@@ -209,6 +209,19 @@ export default function Dashboard() {
     setAddCategory("알파 후보");
   }
 
+  /* ── category + 비중 정보를 AssetResult에 병합 ── */
+  function enrichAssetsForEmail(resultAssets: AssetResult[]) {
+    return resultAssets.map(ar => {
+      const cfg = assets.find(a => a.ticker === ar.ticker);
+      return {
+        ...ar,
+        category: cfg ? effectiveCategory(cfg) : "알파 후보",
+        currentWeight: cfg?.currentWeight ?? "0",
+        targetWeight: cfg?.targetWeight ?? "0",
+      };
+    });
+  }
+
   /* ── 분석 결과 이메일 발송 ── */
   async function sendReport() {
     if (!result) return;
@@ -217,7 +230,7 @@ export default function Dashboard() {
     const vooAsset = result.assets.find(a => a.ticker === "VOO");
     const market_pass = vooAsset ? (vooAsset.return_252d - result.bil_return_252d) >= 0 : false;
     try {
-      await sendAnalysisReport(result.bil_return_252d, market_pass, result.assets);
+      await sendAnalysisReport(result.bil_return_252d, market_pass, enrichAssetsForEmail(result.assets));
       setEmailSent(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "메일 발송 실패");
@@ -241,7 +254,16 @@ export default function Dashboard() {
       setEmailSending(true);
       const vooAsset = data.assets.find(a => a.ticker === "VOO");
       const market_pass = vooAsset ? (vooAsset.return_252d - data.bil_return_252d) >= 0 : false;
-      sendAnalysisReport(data.bil_return_252d, market_pass, data.assets)
+      const enriched = data.assets.map(ar => {
+        const cfg = assets.find(a => a.ticker === ar.ticker);
+        return {
+          ...ar,
+          category: cfg ? effectiveCategory(cfg) : "알파 후보",
+          currentWeight: cfg?.currentWeight ?? "0",
+          targetWeight: cfg?.targetWeight ?? "0",
+        };
+      });
+      sendAnalysisReport(data.bil_return_252d, market_pass, enriched)
         .then(() => setEmailSent(true))
         .catch(() => {})
         .finally(() => setEmailSending(false));
