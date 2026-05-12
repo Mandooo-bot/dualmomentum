@@ -237,6 +237,15 @@ export default function Dashboard() {
       const data = await analyzePortfolio(tickers);
       setResult(data);
 
+      // 분석 실행 시 자동 이메일 발송
+      setEmailSending(true);
+      const vooAsset = data.assets.find(a => a.ticker === "VOO");
+      const market_pass = vooAsset ? (vooAsset.return_252d - data.bil_return_252d) >= 0 : false;
+      sendAnalysisReport(data.bil_return_252d, market_pass, data.assets)
+        .then(() => setEmailSent(true))
+        .catch(() => {})
+        .finally(() => setEmailSending(false));
+
       // 매도 시그널 발생 시 이메일 발송 (분석 실행마다)
       const SELL_SIGNALS = new Set(["1차매도", "전체매도"]);
       const sells = data.assets.filter(a => SELL_SIGNALS.has(a.signal));
@@ -558,7 +567,7 @@ export default function Dashboard() {
         {result && (
           <button onClick={sendReport} disabled={emailSending}
             style={{ background: "none", border: "1px solid var(--border)", color: emailSent ? "var(--buy)" : "var(--text)", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: emailSending ? "not-allowed" : "pointer", width: "100%", marginTop: 8, opacity: emailSending ? 0.6 : 1 }}>
-            {emailSending ? "발송 중..." : emailSent ? "✓ 이메일 발송 완료" : "결과를 이메일로 받기"}
+            {emailSending ? "발송 중..." : emailSent ? "✓ 이메일 발송 완료 — 다시 받기" : "결과를 이메일로 받기"}
           </button>
         )}
 
