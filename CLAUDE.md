@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 현재 진행 상황 (2026-05-11 기준)
+## 현재 진행 상황 (2026-05-13 기준)
 
 ### 완료된 작업
 
@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Supabase → Neon 마이그레이션 | ✅ 완료 | psycopg2-binary, DATABASE_URL 환경변수 |
 | 분석 결과 이메일 발송 | ✅ 완료 | "결과를 이메일로 받기" 버튼, /api/notify/report, Resend API 사용 |
 | Vercel 배포 (프론트엔드) | ✅ 완료 | GitHub 연동 자동 배포 |
-| Railway 배포 (백엔드) | ✅ 완료 | FastAPI, dualmomentum-production.up.railway.app |
+| Render 배포 (백엔드) | ✅ 완료 | FastAPI, dualmomentum.onrender.com (Railway에서 이전) |
 | 포트폴리오 시그널 Yahoo Finance 차트 링크 | ✅ 완료 | 각 종목 행 끝 "차트 ↗" 버튼 → https://finance.yahoo.com/chart/{TICKER} 새 탭 |
 | 매주 월요일 09:00 KST 자동 분석 이메일 스케줄러 | ✅ 완료 | APScheduler, /api/weekly-report (SCHEDULER_SECRET 보호), services/scheduler.py |
 | 이메일 섹터별 그룹화 | ✅ 완료 | 인덱스 코어 → 시스템/인프라섹터 → 모멘텀/고베타 → 알파 후보 순 섹션 구분, 섹터 내 수익률 순 정렬 |
@@ -62,10 +62,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 프론트엔드 | Next.js (React) |
 | 백엔드 | Python FastAPI |
 | 데이터 수집 | Tiingo API (primary) → Yahoo Finance v8 API (fallback, 429 시 자동 전환) |
-| 이메일 발송 | Resend API (HTTP 기반, Railway SMTP 차단 우회) |
+| 이메일 발송 | Resend API (HTTP 기반) |
 | 데이터베이스 | Neon (PostgreSQL, psycopg2 직접 연결, 자동 절전/자동 재개) |
 | 인증 | 카카오 OAuth 2.0 (미구현) |
-| 배포 | Vercel (프론트) + Railway (백엔드) |
+| 배포 | Vercel (프론트) + Render (백엔드) |
 
 ## 개발 명령어
 
@@ -84,19 +84,20 @@ python3 -m venv .venv
 .venv/bin/uvicorn main:app --reload  # http://localhost:8000
 ```
 
-## Railway 환경변수 (필수)
+## Render 환경변수 (필수)
 
 | 변수명 | 설명 |
 |--------|------|
 | `DATABASE_URL` | Neon PostgreSQL 연결 문자열 (`postgresql://...@...neon.tech/neondb?sslmode=require`) |
 | `TIINGO_TOKEN` | Tiingo API 토큰 (데이터 수집 primary) |
 | `RESEND_API_KEY` | Resend 이메일 API 키 (`re_...`) |
+| `SCHEDULER_SECRET` | 주간 스케줄러 보호 시크릿 |
 
 ## Vercel 환경변수 (필수)
 
 | 변수명 | 설명 |
 |--------|------|
-| `NEXT_PUBLIC_API_URL` | Railway 백엔드 URL (`https://dualmomentum-production.up.railway.app`) |
+| `NEXT_PUBLIC_API_URL` | Render 백엔드 URL (`https://dualmomentum.onrender.com`) |
 
 ## 데이터 수집 구조
 
