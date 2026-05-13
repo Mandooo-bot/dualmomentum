@@ -164,7 +164,7 @@ def trigger_weekly_report(x_scheduler_secret: Optional[str] = Header(default=Non
         raise HTTPException(status_code=401, detail="인증 실패")
     try:
         result = run_weekly_report()
-        return result
+        return {"ok": result.get("ok", False), "tickers": result.get("tickers", []), "reason": result.get("reason")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
